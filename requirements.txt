@@ -1,0 +1,14 @@
+fastapi[standard]
+uvicorn[standard]
+sqlmodel 
+sqlalchemy[asyncio]
+asyncpg 
+pydantic
+python-dotenv
+mistralai
+pytest
+python-dotenv
+datauri
+openai
+Jinja2
+pydantic_settings
