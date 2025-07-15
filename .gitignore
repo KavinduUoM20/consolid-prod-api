@@ -2,3 +2,5 @@
 env
 test_db_connection.py
 README.md
+docker-compose.yml
+Dockerfile
