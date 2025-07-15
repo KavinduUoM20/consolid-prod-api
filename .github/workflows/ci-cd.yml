@@ -88,8 +88,31 @@ jobs:
           set -x  # Enable debug mode to see each command
           
           echo "==== System Info ===="
-          docker version
-          docker info
+          docker version || echo "Docker version check failed"
+          docker info || echo "Docker info check failed"
+          
+          echo "==== Checking Docker Permissions ===="
+          echo "Current user: $(whoami)"
+          echo "User groups: $(groups)"
+          echo "Docker socket permissions: $(ls -la /var/run/docker.sock 2>/dev/null || echo 'Docker socket not found')"
+          
+          # Check if user is in docker group but still can't access Docker
+          if groups | grep -q docker && ! docker version >/dev/null 2>&1; then
+            echo "User is in docker group but can't access Docker. This usually means Docker needs to be restarted."
+            echo "Attempting to restart Docker service..."
+            sudo systemctl restart docker || echo "Failed to restart Docker service"
+            sleep 5  # Wait for Docker to restart
+          fi
+          
+          # Test Docker access again
+          if ! docker version >/dev/null 2>&1; then
+            echo "Still cannot access Docker. Please manually restart Docker on the VPS:"
+            echo "sudo systemctl restart docker"
+            echo "Then re-run this deployment."
+            exit 1
+          fi
+          
+          echo "==== Docker access confirmed ===="
           
           echo "==== Checking Docker Hub Connection ===="
           # Try to login with token (non-interactive)
@@ -97,10 +120,7 @@ jobs:
           
           echo "==== Pulling new image ===="
           docker pull ${{ secrets.DOCKER_USERNAME }}/consolid-prod-api:latest || {
-            echo "Failed to pull image - checking Docker permissions"
-            echo "Current user: $(whoami)"
-            echo "Docker group: $(groups)"
-            echo "Docker socket permissions: $(ls -la /var/run/docker.sock 2>/dev/null || echo 'Docker socket not found')"
+            echo "Failed to pull image"
             exit 1
           }
           
