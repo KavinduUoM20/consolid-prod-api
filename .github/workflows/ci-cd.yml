@@ -131,7 +131,7 @@ jobs:
           echo "==== Starting new container ===="
           docker run -d \
             --name consolid-prod-api \
-            -p 8000:8000 \
+            -p 8001:8000 \
             -e DOCIQ_DATABASE_URL="postgresql+asyncpg://consolid_user:12345@host.docker.internal:5432/consolidb" \
             -e APP_NAME="consolid-prod-api" \
             -e DEBUG="false" \
