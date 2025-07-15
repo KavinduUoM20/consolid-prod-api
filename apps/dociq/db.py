@@ -20,7 +20,7 @@ engine = create_async_engine(
         "server_settings": {
             "application_name": "consolidator_ai"
         },
-        "ssl": ssl.create_default_context()
+        "ssl": False
     }
 )
 
