@@ -132,7 +132,7 @@ jobs:
           docker run -d \
             --name consolid-prod-api \
             -p 8001:8000 \
-            -e DOCIQ_DATABASE_URL="postgresql+asyncpg://consolid_user:12345@host.docker.internal:5432/consolidb" \
+            -e DOCIQ_DATABASE_URL="postgresql+asyncpg://consolid_user:12345@nginx-proxy-manager-db-1:5432/consolidb" \
             -e APP_NAME="consolid-prod-api" \
             -e DEBUG="false" \
             -e MISTRAL_API_KEY="${{ secrets.MISTRAL_API_KEY }}" \
@@ -140,7 +140,7 @@ jobs:
             -e AZURE_OPENAI_API_VERSION="${{ secrets.AZURE_OPENAI_API_VERSION }}" \
             -e AZURE_OPENAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}" \
             -e AZURE_OPENAI_DEPLOYMENT="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}" \
-            --add-host=host.docker.internal:host-gateway \
+            --network nginx-proxy-manager_default \
             ${{ secrets.DOCKER_USERNAME }}/consolid-prod-api:latest
           
           echo "==== Verifying container ===="
