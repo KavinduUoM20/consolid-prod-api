@@ -13,9 +13,9 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: consolid_user
-          POSTGRES_PASSWORD: 12345
-          POSTGRES_DB: consolidb
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.DB_NAME }}
         ports:
           - 5432:5432
         options: >-
@@ -39,7 +39,7 @@ jobs:
         
     - name: Run tests
       env:
-        DATABASE_URI: postgresql+asyncpg://consolid_user:12345@localhost:5432/consolidb
+        DATABASE_URI: postgresql+asyncpg://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}
         PYTHONPATH: ${{ github.workspace }}
       run: |
         # Run tests with proper Python path
@@ -132,7 +132,7 @@ jobs:
           docker run -d \
             --name consolid-prod-api \
             -p 8001:8000 \
-            -e DOCIQ_DATABASE_URL="postgresql+asyncpg://consolid_user:12345@nginx-proxy-manager-db-1:5432/consolidb" \
+            -e DOCIQ_DATABASE_URL="postgresql+asyncpg://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@nginx-proxy-manager-db-1:5432/${{ secrets.DB_NAME }}" \
             -e APP_NAME="consolid-prod-api" \
             -e DEBUG="false" \
             -e DOCIQ_CORS_ORIGINS='["http://localhost:3000","http://localhost:3001","http://localhost:5173","http://127.0.0.1:3000","http://127.0.0.1:3001","http://127.0.0.1:5173"]' \
