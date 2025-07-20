@@ -135,6 +135,7 @@ jobs:
             -e DOCIQ_DATABASE_URL="postgresql+asyncpg://consolid_user:12345@nginx-proxy-manager-db-1:5432/consolidb" \
             -e APP_NAME="consolid-prod-api" \
             -e DEBUG="false" \
+            -e DOCIQ_CORS_ORIGINS='["http://localhost:3000","http://localhost:3001","http://localhost:5173","http://127.0.0.1:3000","http://127.0.0.1:3001","http://127.0.0.1:5173"]' \
             -e MISTRAL_API_KEY="${{ secrets.MISTRAL_API_KEY }}" \
             -e AZURE_OPENAI_API_KEY="${{ secrets.AZURE_OPENAI_API_KEY }}" \
             -e AZURE_OPENAI_API_VERSION="${{ secrets.AZURE_OPENAI_API_VERSION }}" \
