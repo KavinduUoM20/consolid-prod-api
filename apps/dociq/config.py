@@ -16,7 +16,7 @@ class DociqSettings(BaseSettings):
         "https://consolidator-ai.site"
     ]
     CORS_ALLOW_CREDENTIALS: bool = True
-    CORS_ALLOW_METHODS: List[str] = ["*"]
+    CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     CORS_ALLOW_HEADERS: List[str] = [
         "*",
         "X-Forwarded-For",
