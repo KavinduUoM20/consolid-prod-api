@@ -17,7 +17,20 @@ class DociqSettings(BaseSettings):
     ]
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["*"]
-    CORS_ALLOW_HEADERS: List[str] = ["*"]
+    CORS_ALLOW_HEADERS: List[str] = [
+        "*",
+        "X-Forwarded-For",
+        "X-Forwarded-Proto", 
+        "X-Forwarded-Host",
+        "X-Real-IP",
+        "X-Requested-With",
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Origin",
+        "Cache-Control",
+        "X-File-Name"
+    ]
 
     class Config:
         env_prefix = "DOCIQ_"
