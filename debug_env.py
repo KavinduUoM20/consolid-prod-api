@@ -1,43 +1,125 @@
+#!/usr/bin/env python3
+"""
+Debug script to check environment and API configuration
+"""
 import os
-from dotenv import load_dotenv
+import sys
+import asyncio
+from pathlib import Path
 
-print("=== Testing Environment Variable Loading ===")
+# Add the project root to Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-# Load environment variables
-load_dotenv()
+def check_environment():
+    """Check environment variables and configuration"""
+    print("=== Environment Check ===")
+    
+    # Check CORS configuration
+    print("\n--- CORS Configuration ---")
+    cors_origins = os.getenv("DOCIQ_CORS_ORIGINS", "Not set")
+    print(f"DOCIQ_CORS_ORIGINS: {cors_origins}")
+    
+    # Check database configuration
+    print("\n--- Database Configuration ---")
+    db_url = os.getenv("DOCIQ_DATABASE_URL", "Not set")
+    print(f"DOCIQ_DATABASE_URL: {'Set' if db_url != 'Not set' else 'Not set'}")
+    
+    # Check API keys
+    print("\n--- API Keys ---")
+    mistral_key = os.getenv("MISTRAL_API_KEY", "Not set")
+    azure_key = os.getenv("AZURE_OPENAI_API_KEY", "Not set")
+    print(f"MISTRAL_API_KEY: {'Set' if mistral_key != 'Not set' else 'Not set'}")
+    print(f"AZURE_OPENAI_API_KEY: {'Set' if azure_key != 'Not set' else 'Not set'}")
+    
+    # Check other important variables
+    print("\n--- Other Configuration ---")
+    debug_mode = os.getenv("DEBUG", "Not set")
+    app_name = os.getenv("APP_NAME", "Not set")
+    print(f"DEBUG: {debug_mode}")
+    print(f"APP_NAME: {app_name}")
 
-print("\n1. All environment variables that start with 'AZURE_OPENAI':")
-azure_vars = {k: v for k, v in os.environ.items() if k.startswith('AZURE_OPENAI')}
-for key, value in azure_vars.items():
-    if 'KEY' in key:
-        masked_value = "***" + value[-4:] if value else "None"
-        print(f"  {key}: {masked_value}")
-    else:
-        print(f"  {key}: {value}")
+def check_cors_config():
+    """Check CORS configuration from settings"""
+    try:
+        from apps.dociq.config import get_dociq_settings
+        settings = get_dociq_settings()
+        print("\n=== CORS Settings from Config ===")
+        print(f"CORS_ORIGINS: {settings.CORS_ORIGINS}")
+        print(f"CORS_ALLOW_CREDENTIALS: {settings.CORS_ALLOW_CREDENTIALS}")
+        print(f"CORS_ALLOW_METHODS: {settings.CORS_ALLOW_METHODS}")
+        print(f"CORS_ALLOW_HEADERS: {settings.CORS_ALLOW_HEADERS}")
+        
+        # Check if production domain is included
+        production_domain = "https://consolidator-ai.site"
+        if production_domain in settings.CORS_ORIGINS:
+            print(f"✅ Production domain '{production_domain}' is included in CORS_ORIGINS")
+        else:
+            print(f"❌ Production domain '{production_domain}' is NOT included in CORS_ORIGINS")
+            
+    except Exception as e:
+        print(f"Error checking CORS config: {e}")
 
-print("\n2. All environment variables that start with 'MISTRAL':")
-mistral_vars = {k: v for k, v in os.environ.items() if k.startswith('MISTRAL')}
-for key, value in mistral_vars.items():
-    if 'KEY' in key:
-        masked_value = "***" + value[-4:] if value else "None"
-        print(f"  {key}: {masked_value}")
-    else:
-        print(f"  {key}: {value}")
+def check_api_routes():
+    """Check if API routes are properly configured"""
+    try:
+        from main import app
+        print("\n=== API Routes Check ===")
+        
+        # Get all routes
+        routes = []
+        for route in app.routes:
+            if hasattr(route, 'path'):
+                routes.append(route.path)
+        
+        # Check for specific routes
+        target_routes = [
+            "/api/v1/dociq/extractions/",
+            "/api/v1/dociq/hello",
+            "/docs"
+        ]
+        
+        for route in target_routes:
+            if route in routes:
+                print(f"✅ Route '{route}' found")
+            else:
+                print(f"❌ Route '{route}' NOT found")
+                
+        print(f"\nTotal routes found: {len(routes)}")
+        
+    except Exception as e:
+        print(f"Error checking API routes: {e}")
 
-print("\n3. Testing specific variable access:")
-print(f"  MISTRAL_API_KEY: {'***' + os.getenv('MISTRAL_API_KEY', 'None')[-4:] if os.getenv('MISTRAL_API_KEY') else 'None'}")
-print(f"  AZURE_OPENAI_API_KEY: {'***' + os.getenv('AZURE_OPENAI_API_KEY', 'None')[-4:] if os.getenv('AZURE_OPENAI_API_KEY') else 'None'}")
+async def test_database_connection():
+    """Test database connection"""
+    try:
+        from apps.dociq.db import engine
+        print("\n=== Database Connection Test ===")
+        
+        async with engine.begin() as conn:
+            result = await conn.execute("SELECT 1")
+            print("✅ Database connection successful")
+            
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
 
-print("\n4. Testing if we can import parser.py:")
-try:
-    from common.utils.parser import client as mistral_client
-    print(f"  ✓ Parser imported successfully, Mistral client: {mistral_client is not None}")
-except Exception as e:
-    print(f"  ✗ Error importing parser: {e}")
+def main():
+    """Main debug function"""
+    print("🔍 API Debug Environment Check")
+    print("=" * 50)
+    
+    check_environment()
+    check_cors_config()
+    check_api_routes()
+    
+    # Test database connection
+    try:
+        asyncio.run(test_database_connection())
+    except Exception as e:
+        print(f"❌ Database test failed: {e}")
+    
+    print("\n" + "=" * 50)
+    print("Debug check complete!")
 
-print("\n5. Testing if we can import llm_connections.py:")
-try:
-    from common.utils.llm_connections import client as azure_client
-    print(f"  ✓ LLM connections imported successfully, Azure client: {azure_client is not None}")
-except Exception as e:
-    print(f"  ✗ Error importing llm_connections: {e}") 
+if __name__ == "__main__":
+    main() 
