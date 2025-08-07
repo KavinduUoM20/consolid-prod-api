@@ -63,21 +63,8 @@ async def get_document_content(session: AsyncSession, document_id: UUID) -> str:
                 with open(md_file_path, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
                 
-                # Check if the content is a path to another file
-                if content.startswith('outputs\\') or content.startswith('outputs/'):
-                    # This is a reference to another file, read that file instead
-                    referenced_file = Path(content)
-                    
-                    if referenced_file.exists():
-                        with open(referenced_file, 'r', encoding='utf-8') as f:
-                            actual_content = f.read()
-                        return actual_content
-                    else:
-                        return content  # Return the path if referenced file doesn't exist
-                else:
-                    # This is actual content
-                    if content:
-                        return content
+                if content:
+                    return content
             except Exception as e:
                 print(f"Error reading markdown content from {md_file_path}: {e}")
         else:

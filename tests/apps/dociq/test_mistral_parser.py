@@ -31,14 +31,9 @@ class TestMistralParser:
             
             # Verify the result
             assert result is not None
-            assert result.endswith('.md')
-            
-            # Verify the file was created
-            assert os.path.exists(result)
-            
-            # Clean up
-            if os.path.exists(result):
-                os.remove(result)
+            assert isinstance(result, str)
+            assert "# Test Document" in result
+            assert "This is test content extracted by Mistral OCR." in result
     
     def test_parse_with_mistral_from_bytes_failure(self):
         """Test parsing failure handling"""
@@ -102,11 +97,9 @@ class TestMistralParser:
                 
                 # Verify the result
                 assert result is not None
-                assert result.endswith('.md')
-                
-                # Clean up
-                if os.path.exists(result):
-                    os.remove(result)
+                assert isinstance(result, str)
+                assert f"# {filename}" in result
+                assert "Test content." in result
 
 
 if __name__ == "__main__":
