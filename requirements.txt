@@ -11,4 +11,3 @@ datauri
 openai
 Jinja2
 pydantic_settings
-redis
