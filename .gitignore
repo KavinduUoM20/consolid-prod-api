@@ -2,3 +2,6 @@
 env
 test_db_connection.py
 README.md
+test_ragchat.py
+test_websocket_client.py
+websocket_test.html

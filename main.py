@@ -7,11 +7,14 @@ from starlette.responses import RedirectResponse
 from api.router import router as api_router  # << use this, not api.v1.router
 from apps.dociq.db import init_dociq_db
 from apps.dociq.config import get_dociq_settings
+from apps.ragchat.db import init_ragchat_db
+from apps.ragchat.config import get_ragchat_settings
 
 app = FastAPI(title="Consolidator AI API", version="1.0.0")
 
 # Get settings
-settings = get_dociq_settings()
+dociq_settings = get_dociq_settings()
+ragchat_settings = get_ragchat_settings()
 
 # Add trusted host middleware for security
 app.add_middleware(
@@ -22,10 +25,10 @@ app.add_middleware(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
-    allow_methods=settings.CORS_ALLOW_METHODS,
-    allow_headers=settings.CORS_ALLOW_HEADERS,
+    allow_origins=dociq_settings.CORS_ORIGINS,
+    allow_credentials=dociq_settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=dociq_settings.CORS_ALLOW_METHODS,
+    allow_headers=dociq_settings.CORS_ALLOW_HEADERS,
 )
 
 # Custom middleware to handle HTTPS redirects and proxy headers
@@ -73,5 +76,6 @@ app.add_middleware(SecurityHeadersMiddleware)
 async def startup_event():
     """Initialize database on startup"""
     await init_dociq_db()
+    await init_ragchat_db()
 
 app.include_router(api_router) 
