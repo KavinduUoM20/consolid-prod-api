@@ -1,9 +1,16 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 class DociqSettings(BaseSettings):
     DATABASE_URL: str
+    
+    # Redis settings
+    REDIS_HOST: str = "big-bear-redis"
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_TIMEOUT: int = 30000
+    REDIS_DB: int = 0
     
     # CORS settings
     CORS_ORIGINS: List[str] = [
