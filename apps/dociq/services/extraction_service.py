@@ -16,14 +16,31 @@ from common.utils.parser import parse_with_mistral_from_bytes
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# Configure Redis connection
-REDIS_CLIENT = redis.Redis(
-    host='big-bear-redis',
-    port=6379,
-    username='default',
-    password='12345',
-    decode_responses=False  # Keep as bytes for file storage
-)
+# Configure Redis connection with environment variable fallbacks
+REDIS_HOST = os.getenv('REDIS_HOST', 'big-bear-redis')
+REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
+REDIS_USERNAME = os.getenv('REDIS_USERNAME', 'default')
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '12345')
+
+try:
+    REDIS_CLIENT = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        username=REDIS_USERNAME,
+        password=REDIS_PASSWORD,
+        decode_responses=False,  # Keep as bytes for file storage
+        socket_connect_timeout=5,
+        socket_timeout=5
+    )
+    # Test the connection
+    REDIS_CLIENT.ping()
+    REDIS_AVAILABLE = True
+    print(f"Redis connection established successfully to {REDIS_HOST}:{REDIS_PORT}")
+except Exception as e:
+    print(f"Redis connection failed: {e}")
+    print("Files will only be saved to disk")
+    REDIS_AVAILABLE = False
+    REDIS_CLIENT = None
 
 
 class ExtractionService:
@@ -138,12 +155,15 @@ class ExtractionService:
             buffer.write(file_bytes)
         
         # Save to Redis
-        try:
-            redis_key = f"file:{unique_filename}"
-            REDIS_CLIENT.set(redis_key, file_bytes)
-            print(f"File saved to Redis with key: {redis_key}")
-        except Exception as e:
-            print(f"Error saving file to Redis: {e}")
+        if REDIS_AVAILABLE and REDIS_CLIENT:
+            try:
+                redis_key = f"file:{unique_filename}"
+                REDIS_CLIENT.set(redis_key, file_bytes)
+                print(f"File saved to Redis with key: {redis_key}")
+            except Exception as e:
+                print(f"Error saving file to Redis: {e}")
+        else:
+            print(f"Redis not available, file '{unique_filename}' saved only to disk.")
         
         return file_path
 
