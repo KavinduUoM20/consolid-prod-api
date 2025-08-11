@@ -5,6 +5,7 @@ from sqlalchemy import select
 import os
 import shutil
 from pathlib import Path
+import redis
 
 from apps.dociq.models.document import Document
 from apps.dociq.models.extraction import Extraction
@@ -14,6 +15,15 @@ from common.utils.parser import parse_with_mistral_from_bytes
 # Configure upload directory
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# Configure Redis connection
+REDIS_CLIENT = redis.Redis(
+    host='big-bear-redis',
+    port=6379,
+    username='default',
+    password='12345',
+    decode_responses=False  # Keep as bytes for file storage
+)
 
 
 class ExtractionService:
@@ -118,13 +128,22 @@ class ExtractionService:
             return 'pdf'  # Default to PDF
 
     def _save_file(self, file_bytes: bytes, filename: str) -> Path:
-        """Save uploaded file to disk"""
+        """Save uploaded file to disk and Redis"""
         # Create unique filename to avoid conflicts
         unique_filename = f"{uuid.uuid4()}_{filename}"
         file_path = UPLOAD_DIR / unique_filename
         
+        # Save to disk
         with open(file_path, "wb") as buffer:
             buffer.write(file_bytes)
+        
+        # Save to Redis
+        try:
+            redis_key = f"file:{unique_filename}"
+            REDIS_CLIENT.set(redis_key, file_bytes)
+            print(f"File saved to Redis with key: {redis_key}")
+        except Exception as e:
+            print(f"Error saving file to Redis: {e}")
         
         return file_path
 
