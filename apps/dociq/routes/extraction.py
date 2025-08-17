@@ -1,6 +1,6 @@
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -57,7 +57,7 @@ async def create_extraction(
     - Returns extraction_id for tracking the KYC flow
     """
     # Validate file type
-    allowed_extensions = ['.pdf', '.xlsx', '.xls', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png', '.gif']
+    allowed_extensions = ['.pdf', '.xlsx', '.xls']
     file_extension = '.' + file.filename.split('.')[-1].lower() if '.' in file.filename else ''
     
     if file_extension not in allowed_extensions:
@@ -237,3 +237,39 @@ async def map_extraction(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to map extraction: {str(e)}"
         ) 
+
+
+@router.post("/extractions/{extraction_id}/enhance")
+async def enhance_extraction(
+    extraction_id: UUID,
+    extraction_service: ExtractionService = Depends(get_extraction_service)
+):
+    """
+    Enhance extraction content and processing
+    
+    - **extraction_id**: UUID of the extraction to enhance
+    """
+    # TODO: Implement extraction enhancement logic
+    # This endpoint will be used to improve or refine the extraction results
+    pass
+
+
+@router.websocket("/extractions/ws")
+async def extraction_websocket(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time extraction updates
+    """
+    await websocket.accept()
+    
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_text()
+            
+            # Echo back the same message (simple response)
+            await websocket.send_text(f"Echo: {data}")
+            
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+    finally:
+        await websocket.close() 
