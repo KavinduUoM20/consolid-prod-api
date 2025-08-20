@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -173,6 +173,18 @@ class ExtractionService:
             select(Extraction).where(Extraction.id == extraction_id)
         )
         return result.scalar_one_or_none()
+
+    async def get_all_extractions(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[Extraction]:
+        """Get all extractions with optional pagination"""
+        query = select(Extraction).order_by(Extraction.created_at.desc())
+        
+        if offset is not None:
+            query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+            
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
     async def get_extraction_with_document(self, extraction_id: uuid.UUID) -> Optional[Extraction]:
         """Get extraction with document relationship loaded"""

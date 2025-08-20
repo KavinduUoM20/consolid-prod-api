@@ -1,6 +1,6 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -110,6 +110,30 @@ async def create_extraction(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process document: {str(e)}"
+        )
+
+
+@router.get("/extractions/", response_model=List[ExtractionRead])
+async def get_all_extractions(
+    limit: Optional[int] = Query(None, ge=1, le=100, description="Number of extractions to return (max 100)"),
+    offset: Optional[int] = Query(None, ge=0, description="Number of extractions to skip"),
+    extraction_service: ExtractionService = Depends(get_extraction_service)
+):
+    """
+    Get all extractions with optional pagination
+    
+    - **limit**: Maximum number of extractions to return (1-100)
+    - **offset**: Number of extractions to skip for pagination
+    - Returns list of extraction records ordered by creation date (newest first)
+    """
+    try:
+        extractions = await extraction_service.get_all_extractions(limit=limit, offset=offset)
+        return extractions
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve extractions: {str(e)}"
         )
 
 
