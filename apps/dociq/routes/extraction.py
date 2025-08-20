@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +38,16 @@ class ProceedToNextStepResponse(BaseModel):
     template_id: UUID
     current_step: str
     message: str
+
+
+class EnhanceExtractionRequest(BaseModel):
+    data: Dict[str, Any]
+
+
+class EnhanceExtractionResponse(BaseModel):
+    extraction_id: UUID
+    message: str
+    data: Dict[str, Any]
 
 
 async def get_extraction_service(session: AsyncSession = Depends(get_dociq_session)) -> ExtractionService:
@@ -239,19 +249,42 @@ async def map_extraction(
         ) 
 
 
-@router.post("/extractions/{extraction_id}/enhance")
+@router.post("/extractions/{extraction_id}/enhance", response_model=EnhanceExtractionResponse)
 async def enhance_extraction(
     extraction_id: UUID,
+    request: EnhanceExtractionRequest,
     extraction_service: ExtractionService = Depends(get_extraction_service)
 ):
     """
     Enhance extraction content and processing
     
     - **extraction_id**: UUID of the extraction to enhance
+    - **request**: Request body containing data to enhance
+    - Returns the same data object from the request body
     """
-    # TODO: Implement extraction enhancement logic
-    # This endpoint will be used to improve or refine the extraction results
-    pass
+    try:
+        # Verify extraction exists
+        extraction = await extraction_service.get_extraction_by_id(extraction_id)
+        if not extraction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Extraction with ID {extraction_id} not found"
+            )
+        
+        # Return the same data object from the request body
+        return EnhanceExtractionResponse(
+            extraction_id=extraction_id,
+            message="Extraction enhancement completed successfully",
+            data=request.data
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enhance extraction: {str(e)}"
+        )
 
 
 @router.websocket("/extractions/ws")
