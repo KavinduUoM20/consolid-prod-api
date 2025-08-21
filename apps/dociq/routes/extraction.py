@@ -286,29 +286,14 @@ async def enhance_extraction(
     - **request**: Request body containing data to enhance
     - Returns the same data object from the request body
     """
-    try:
-        # Verify extraction exists
-        extraction = await extraction_service.get_extraction_by_id(extraction_id)
-        if not extraction:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Extraction with ID {extraction_id} not found"
-            )
-        
-        # Return the same data object from the request body
-        return EnhanceExtractionResponse(
-            extraction_id=extraction_id,
-            message="Extraction enhancement completed successfully",
-            data=request.data
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to enhance extraction: {str(e)}"
-        )
+    print(f"Received request for extraction_id: {extraction_id}")
+    print(f"Request data: {request.data}")
+    
+    return EnhanceExtractionResponse(
+        extraction_id=extraction_id,
+        message="Extraction enhancement completed successfully",
+        data=request.data
+    )
 
 
 @router.websocket("/extractions/ws")
