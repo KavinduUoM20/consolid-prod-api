@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any, List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, Query, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -57,6 +57,8 @@ async def get_extraction_service(session: AsyncSession = Depends(get_dociq_sessi
 
 @router.post("/extractions/", response_model=ExtractionResponse, status_code=status.HTTP_201_CREATED)
 async def create_extraction(
+    request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     extraction_service: ExtractionService = Depends(get_extraction_service)
 ):
@@ -95,6 +97,20 @@ async def create_extraction(
             message = "Document uploaded but Mistral processing failed"
         else:
             message = "Document uploaded successfully"
+        
+        # Extract headers for background processing
+        cluster = request.headers.get("X-Cluster")
+        customer = request.headers.get("X-Customer")
+        
+        # Add background task if headers are present
+        if cluster and customer:
+            background_tasks.add_task(
+                extraction_service.process_cluster_customer_headers,
+                cluster=cluster,
+                customer=customer,
+                extraction_id=str(extraction.id),
+                document_id=str(document.id)
+            )
         
         return ExtractionResponse(
             extraction_id=extraction.id,

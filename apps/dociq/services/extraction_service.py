@@ -46,6 +46,31 @@ except Exception as e:
 class ExtractionService:
     def __init__(self, session: AsyncSession):
         self.session = session
+    
+    def process_cluster_customer_headers(self, cluster: str, customer: str, extraction_id: str, document_id: str):
+        """
+        Background task to process X-Cluster and X-Customer headers
+        
+        Args:
+            cluster: Value from X-Cluster header
+            customer: Value from X-Customer header  
+            extraction_id: ID of the created extraction
+            document_id: ID of the created document
+        """
+        print(f"=== Background Task Processing ===")
+        print(f"Cluster: {cluster}")
+        print(f"Customer: {customer}")
+        print(f"Extraction ID: {extraction_id}")
+        print(f"Document ID: {document_id}")
+        print(f"=== End Background Task ===")
+        
+        # Add your actual background processing logic here
+        # Examples:
+        # - Send analytics/tracking data
+        # - Update external systems
+        # - Log to specialized systems
+        # - Trigger notifications
+        # - Update customer-specific configurations
 
     async def create_extraction_with_document(
         self, 
