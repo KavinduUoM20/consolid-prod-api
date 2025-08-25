@@ -12,6 +12,8 @@ class ExtractionRead(BaseModel):
     target_mapping_id: Optional[UUID] = None
     current_step: Optional[str] = None
     status: Optional[str] = None
+    cluster: Optional[str] = None
+    customer: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -29,6 +31,8 @@ class ExtractionUpdate(BaseModel):
     target_mapping_id: Optional[UUID] = None
     current_step: Optional[str] = None
     status: Optional[str] = None
+    cluster: Optional[str] = None
+    customer: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,5 +44,7 @@ class ExtractionCreate(BaseModel):
     target_mapping_id: Optional[UUID] = None
     current_step: Optional[str] = None
     status: Optional[str] = None
+    cluster: Optional[str] = None
+    customer: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True) 

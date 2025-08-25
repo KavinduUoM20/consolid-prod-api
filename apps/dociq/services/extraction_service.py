@@ -76,7 +76,9 @@ class ExtractionService:
         self, 
         file_bytes: bytes, 
         filename: str,
-        file_size: int
+        file_size: int,
+        cluster: Optional[str] = None,
+        customer: Optional[str] = None
     ) -> Tuple[Extraction, Document]:
         """
         Create a document and extraction record, process with Mistral
@@ -85,6 +87,8 @@ class ExtractionService:
             file_bytes: Uploaded file bytes
             filename: Original filename
             file_size: File size in bytes
+            cluster: Optional cluster identifier
+            customer: Optional customer identifier
             
         Returns:
             Tuple of (Extraction, Document) records
@@ -109,7 +113,9 @@ class ExtractionService:
         extraction = Extraction(
             document_id=document.id,
             current_step="document_upload",
-            status="uploaded"
+            status="uploaded",
+            cluster=cluster,
+            customer=customer
         )
         self.session.add(extraction)
         await self.session.flush()  # Get the ID without committing

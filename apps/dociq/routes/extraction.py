@@ -83,11 +83,17 @@ async def create_extraction(
         file_content = await file.read()
         file_size = len(file_content)
         
+        # Extract headers for cluster and customer information
+        cluster = request.headers.get("X-Cluster")
+        customer = request.headers.get("X-Customer")
+        
         # Create extraction and document records, process with Mistral
         extraction, document = await extraction_service.create_extraction_with_document(
             file_bytes=file_content,
             filename=file.filename,
-            file_size=file_size
+            file_size=file_size,
+            cluster=cluster,
+            customer=customer
         )
         
         # Determine response message based on processing result
@@ -97,10 +103,6 @@ async def create_extraction(
             message = "Document uploaded but Mistral processing failed"
         else:
             message = "Document uploaded successfully"
-        
-        # Extract headers for background processing
-        cluster = request.headers.get("X-Cluster")
-        customer = request.headers.get("X-Customer")
         
         # Add background task if headers are present
         if cluster and customer:
