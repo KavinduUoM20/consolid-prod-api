@@ -49,7 +49,7 @@ class ExtractionService:
     def __init__(self, session: AsyncSession):
         self.session = session
     
-    def process_cluster_customer_headers(self, cluster: str, customer: str, extraction_id: str, document_id: str):
+    async def process_cluster_customer_headers(self, cluster: str, customer: str, extraction_id: str, document_id: str):
         """
         Background task to process X-Cluster and X-Customer headers
         
@@ -67,7 +67,7 @@ class ExtractionService:
         print(f"=== End Background Task ===")
         
         # Run concurrent queries to database tables
-        asyncio.run(self._query_database_tables(cluster, customer))
+        await self._query_database_tables(cluster, customer)
         
         # Add your actual background processing logic here
         # Examples:
