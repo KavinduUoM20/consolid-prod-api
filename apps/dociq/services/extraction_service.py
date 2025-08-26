@@ -1,7 +1,8 @@
 from typing import Optional, Tuple, List
 import uuid
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 import os
 import shutil
 from pathlib import Path
@@ -10,6 +11,7 @@ import redis
 from apps.dociq.models.document import Document
 from apps.dociq.models.extraction import Extraction
 from apps.dociq.llm.prompt_utils import process_content_mapping
+from apps.dociq.db import AsyncSessionLocal
 from common.utils.parser import parse_with_mistral_from_bytes
 
 # Configure upload directory
@@ -64,6 +66,9 @@ class ExtractionService:
         print(f"Document ID: {document_id}")
         print(f"=== End Background Task ===")
         
+        # Run concurrent queries to database tables
+        asyncio.run(self._query_database_tables(cluster, customer))
+        
         # Add your actual background processing logic here
         # Examples:
         # - Send analytics/tracking data
@@ -71,6 +76,95 @@ class ExtractionService:
         # - Log to specialized systems
         # - Trigger notifications
         # - Update customer-specific configurations
+
+    async def _query_database_tables(self, cluster: str, customer: str):
+        """
+        Concurrently query the database tables: customers, supplier, material_security_group
+        
+        Args:
+            cluster: Cluster identifier
+            customer: Customer identifier
+        """
+        try:
+            # Create a new database session for this background task
+            async with AsyncSessionLocal() as session:
+                # Define the three concurrent queries
+                customers_query = text("""
+                    SELECT *
+                    FROM customers
+                    WHERE cluster ILIKE :cluster
+                      AND customer ILIKE :customer
+                """)
+                supplier_query = text("""
+                    SELECT *
+                    FROM supplier
+                    WHERE cluster ILIKE :cluster
+                """)
+                material_security_group_query = text("""
+                    SELECT *
+                    FROM material_security_group
+                    WHERE cluster ILIKE :cluster 
+                      AND customer ILIKE :customer
+                """)
+                
+                # Execute all three queries concurrently
+                print("Starting concurrent queries to database...")
+                
+                customers_task = session.execute(customers_query, {"cluster": cluster, "customer": customer})
+                supplier_task = session.execute(supplier_query, {"cluster": cluster})
+                material_security_group_task = session.execute(material_security_group_query, {"cluster": cluster, "customer": customer})
+                
+                # Wait for all queries to complete
+                customers_result, supplier_result, material_security_group_result = await asyncio.gather(
+                    customers_task,
+                    supplier_task,
+                    material_security_group_task,
+                    return_exceptions=True
+                )
+                
+                # Process results
+                print("=== Database Query Results ===")
+                
+                # Process customers result
+                if isinstance(customers_result, Exception):
+                    print(f"Customers query failed: {customers_result}")
+                else:
+                    customers_rows = customers_result.fetchall()
+                    print(f"Customers table: {len(customers_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(customers_rows[:3]):  # Show first 3 rows
+                        print(f"  Customer {i+1}: {dict(row._mapping)}")
+                    if len(customers_rows) > 3:
+                        print(f"  ... and {len(customers_rows) - 3} more rows")
+                
+                # Process supplier result
+                if isinstance(supplier_result, Exception):
+                    print(f"Supplier query failed: {supplier_result}")
+                else:
+                    supplier_rows = supplier_result.fetchall()
+                    print(f"Supplier table: {len(supplier_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(supplier_rows[:3]):  # Show first 3 rows
+                        print(f"  Supplier {i+1}: {dict(row._mapping)}")
+                    if len(supplier_rows) > 3:
+                        print(f"  ... and {len(supplier_rows) - 3} more rows")
+                
+                # Process material_security_group result
+                if isinstance(material_security_group_result, Exception):
+                    print(f"Material security group query failed: {material_security_group_result}")
+                else:
+                    material_security_group_rows = material_security_group_result.fetchall()
+                    print(f"Material security group table: {len(material_security_group_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(material_security_group_rows[:3]):  # Show first 3 rows
+                        print(f"  Material security group {i+1}: {dict(row._mapping)}")
+                    if len(material_security_group_rows) > 3:
+                        print(f"  ... and {len(material_security_group_rows) - 3} more rows")
+                
+                print("=== End Database Query Results ===")
+                
+        except Exception as e:
+            print(f"Error querying database tables: {e}")
 
     async def create_extraction_with_document(
         self, 
