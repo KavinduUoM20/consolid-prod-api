@@ -93,28 +93,48 @@ class ExtractionService:
         try:
             # Create a new database session for this background task
             async with AsyncSessionLocal() as session:
-                # Define the three concurrent queries
+                # First, let's check if the tables exist and have any data at all
+                try:
+                    # Check if tables exist and have data
+                    tables_check = await session.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('customers', 'supplier', 'material_security_group')"))
+                    existing_tables = [row[0] for row in tables_check.fetchall()]
+                    print(f"Existing tables: {existing_tables}")
+                    
+                    for table in existing_tables:
+                        count_result = await session.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                        count = count_result.scalar()
+                        print(f"Table '{table}' has {count} total records")
+                        
+                except Exception as e:
+                    print(f"Error checking tables: {e}")
+                
+                # Define the three concurrent queries with case insensitive partial matching
                 customers_query = text("""
                     SELECT *
                     FROM customers
-                    WHERE cluster ILIKE :cluster
-                      AND customer ILIKE :customer
+                    WHERE cluster ILIKE '%' || :cluster || '%'
+                      AND customer ILIKE '%' || :customer || '%'
                 """)
                 supplier_query = text("""
                     SELECT *
                     FROM supplier
-                    WHERE cluster ILIKE :cluster
+                    WHERE cluster ILIKE '%' || :cluster || '%'
                 """)
                 material_security_group_query = text("""
                     SELECT *
                     FROM material_security_group
-                    WHERE cluster ILIKE :cluster 
-                      AND customer ILIKE :customer
-                      AND material_type ILIKE :material_type
+                    WHERE cluster ILIKE '%' || :cluster || '%' 
+                      AND customer ILIKE '%' || :customer || '%'
+                      AND material_type ILIKE '%' || :material_type || '%'
                 """)
                 
                 # Execute all three queries concurrently
-                # print(f"Starting concurrent queries to database with material_type: {material_type}...")
+                print(f"Starting concurrent queries to database with material_type: {material_type}...")
+                print(f"Query parameters - cluster: '{cluster}', customer: '{customer}', material_type: '{material_type}'")
+                print("Executing queries with partial matching:")
+                print(f"  - customers: WHERE cluster ILIKE '%{cluster}%' AND customer ILIKE '%{customer}%'")
+                print(f"  - supplier: WHERE cluster ILIKE '%{cluster}%'")
+                print(f"  - material_security_group: WHERE cluster ILIKE '%{cluster}%' AND customer ILIKE '%{customer}%' AND material_type ILIKE '%{material_type}%'")
                 
                 customers_task = session.execute(customers_query, {"cluster": cluster, "customer": customer})
                 supplier_task = session.execute(supplier_query, {"cluster": cluster})
@@ -133,42 +153,42 @@ class ExtractionService:
                 
                 # Process customers result
                 if isinstance(customers_result, Exception):
-                    # print(f"Customers query failed: {customers_result}")
+                    print(f"Customers query failed: {customers_result}")
                     customers_rows = []
                 else:
                     customers_rows = customers_result.fetchall()
-                    # print(f"Customers table: {len(customers_rows)} rows retrieved")
-                    # # Optionally print first few rows for debugging
-                    # for i, row in enumerate(customers_rows[:3]):  # Show first 3 rows
-                    #     print(f"  Customer {i+1}: {dict(row._mapping)}")
-                    # if len(customers_rows) > 3:
-                    #     print(f"  ... and {len(customers_rows) - 3} more rows")
+                    print(f"Customers table: {len(customers_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(customers_rows[:3]):  # Show first 3 rows
+                        print(f"  Customer {i+1}: {dict(row._mapping)}")
+                    if len(customers_rows) > 3:
+                        print(f"  ... and {len(customers_rows) - 3} more rows")
                 
                 # Process supplier result
                 if isinstance(supplier_result, Exception):
-                    # print(f"Supplier query failed: {supplier_result}")
+                    print(f"Supplier query failed: {supplier_result}")
                     supplier_rows = []
                 else:
                     supplier_rows = supplier_result.fetchall()
-                    # print(f"Supplier table: {len(supplier_rows)} rows retrieved")
-                    # # Optionally print first few rows for debugging
-                    # for i, row in enumerate(supplier_rows[:3]):  # Show first 3 rows
-                    #     print(f"  Supplier {i+1}: {dict(row._mapping)}")
-                    # if len(supplier_rows) > 3:
-                    #     print(f"  ... and {len(supplier_rows) - 3} more rows")
+                    print(f"Supplier table: {len(supplier_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(supplier_rows[:3]):  # Show first 3 rows
+                        print(f"  Supplier {i+1}: {dict(row._mapping)}")
+                    if len(supplier_rows) > 3:
+                        print(f"  ... and {len(supplier_rows) - 3} more rows")
                 
                 # Process material_security_group result
                 if isinstance(material_security_group_result, Exception):
-                    # print(f"Material security group query failed: {material_security_group_result}")
+                    print(f"Material security group query failed: {material_security_group_result}")
                     material_security_group_rows = []
                 else:
                     material_security_group_rows = material_security_group_result.fetchall()
-                    # print(f"Material security group table: {len(material_security_group_rows)} rows retrieved")
-                    # # Optionally print first few rows for debugging
-                    # for i, row in enumerate(material_security_group_rows[:3]):  # Show first 3 rows
-                    #     print(f"  Material security group {i+1}: {dict(row._mapping)}")
-                    # if len(material_security_group_rows) > 3:
-                    #     print(f"  ... and {len(material_security_group_rows) - 3} more rows")
+                    print(f"Material security group table: {len(material_security_group_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(material_security_group_rows[:3]):  # Show first 3 rows
+                        print(f"  Material security group {i+1}: {dict(row._mapping)}")
+                    if len(material_security_group_rows) > 3:
+                        print(f"  ... and {len(material_security_group_rows) - 3} more rows")
                 
                 # Store results in Redis as hashmaps
                 await self._store_table_results_in_redis(
@@ -279,8 +299,15 @@ class ExtractionService:
                 "supplier": supplier_hash_key if supplier_rows else None, 
                 "material_security_group": msg_hash_key if material_security_group_rows else None
             }
+            
+            print(f"Redis storage summary:")
+            print(f"  - customers_rows: {len(customers_rows)} -> hash_key: {customers_hash_key if customers_rows else 'None'}")
+            print(f"  - supplier_rows: {len(supplier_rows)} -> hash_key: {supplier_hash_key if supplier_rows else 'None'}")
+            print(f"  - material_security_group_rows: {len(material_security_group_rows)} -> hash_key: {msg_hash_key if material_security_group_rows else 'None'}")
+            
             # Remove None values
             table_keys = {k: v for k, v in table_keys.items() if v is not None}
+            print(f"  - Final table_keys: {table_keys}")
             
             REDIS_CLIENT.hset(master_key, "query_info", json.dumps({
                 "cluster": cluster,
