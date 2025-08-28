@@ -48,6 +48,7 @@ class EnhanceExtractionResponse(BaseModel):
     extraction_id: UUID
     message: str
     data: Dict[str, Any]
+    redis_data: Optional[Dict[str, Any]] = None
 
 
 async def get_extraction_service(session: AsyncSession = Depends(get_dociq_session)) -> ExtractionService:
@@ -83,9 +84,10 @@ async def create_extraction(
         file_content = await file.read()
         file_size = len(file_content)
         
-        # Extract headers for cluster and customer information
+        # Extract headers for cluster, customer, and material type information
         cluster = request.headers.get("X-Cluster")
         customer = request.headers.get("X-Customer")
+        material_type = request.headers.get("X-Material-Type")
         
         # Create extraction and document records, process with Mistral
         extraction, document = await extraction_service.create_extraction_with_document(
@@ -93,7 +95,8 @@ async def create_extraction(
             filename=file.filename,
             file_size=file_size,
             cluster=cluster,
-            customer=customer
+            customer=customer,
+            material_type=material_type
         )
         
         # Determine response message based on processing result
@@ -110,6 +113,7 @@ async def create_extraction(
                 extraction_service.process_cluster_customer_headers,
                 cluster=cluster,
                 customer=customer,
+                material_type=material_type,
                 extraction_id=str(extraction.id),
                 document_id=str(document.id)
             )
@@ -302,16 +306,50 @@ async def enhance_extraction(
     
     - **extraction_id**: UUID of the extraction to enhance
     - **request**: Request body containing data to enhance
-    - Returns the same data object from the request body
+    - Returns the same data object from the request body plus Redis table results
     """
-    print(f"Received request for extraction_id: {extraction_id}")
-    print(f"Request data: {request.data}")
-    
-    return EnhanceExtractionResponse(
-        extraction_id=extraction_id,
-        message="Extraction enhancement completed successfully",
-        data=request.data
-    )
+    try:
+        # Get the extraction record to retrieve cluster, customer, and material_type
+        extraction = await extraction_service.get_extraction_by_id(extraction_id)
+        if not extraction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Extraction {extraction_id} not found"
+            )
+        
+        # Fetch Redis table results if we have the required parameters
+        redis_data = None
+        if extraction.cluster and extraction.customer and extraction.material_type:
+            redis_data = extraction_service.get_all_table_results_from_redis(
+                cluster=extraction.cluster,
+                customer=extraction.customer,
+                material_type=extraction.material_type
+            )
+        
+        # Prepare response message
+        message = "Extraction enhancement completed successfully"
+        if redis_data:
+            total_customers = len(redis_data.get("customers", []))
+            total_suppliers = len(redis_data.get("suppliers", []))
+            total_msg = len(redis_data.get("material_security_groups", []))
+            message += f" with {total_customers} customers, {total_suppliers} suppliers, {total_msg} material security groups"
+        else:
+            message += " (no Redis data available)"
+        
+        return EnhanceExtractionResponse(
+            extraction_id=extraction_id,
+            message=message,
+            data=request.data,
+            redis_data=redis_data
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enhance extraction: {str(e)}"
+        )
 
 
 @router.websocket("/extractions/ws")

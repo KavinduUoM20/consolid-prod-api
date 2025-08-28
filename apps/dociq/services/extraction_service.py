@@ -1,6 +1,8 @@
 from typing import Optional, Tuple, List
 import uuid
 import asyncio
+import json
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 import os
@@ -49,25 +51,27 @@ class ExtractionService:
     def __init__(self, session: AsyncSession):
         self.session = session
     
-    async def process_cluster_customer_headers(self, cluster: str, customer: str, extraction_id: str, document_id: str):
+    async def process_cluster_customer_headers(self, cluster: str, customer: str, material_type: str, extraction_id: str, document_id: str):
         """
-        Background task to process X-Cluster and X-Customer headers
+        Background task to process X-Cluster, X-Customer, and X-Material-Type headers
         
         Args:
             cluster: Value from X-Cluster header
-            customer: Value from X-Customer header  
+            customer: Value from X-Customer header
+            material_type: Value from X-Material-Type header
             extraction_id: ID of the created extraction
             document_id: ID of the created document
         """
         print(f"=== Background Task Processing ===")
         print(f"Cluster: {cluster}")
         print(f"Customer: {customer}")
+        print(f"Material Type: {material_type}")
         print(f"Extraction ID: {extraction_id}")
         print(f"Document ID: {document_id}")
         print(f"=== End Background Task ===")
         
         # Run concurrent queries to database tables
-        await self._query_database_tables(cluster, customer)
+        await self._query_database_tables(cluster, customer, material_type)
         
         # Add your actual background processing logic here
         # Examples:
@@ -77,13 +81,14 @@ class ExtractionService:
         # - Trigger notifications
         # - Update customer-specific configurations
 
-    async def _query_database_tables(self, cluster: str, customer: str):
+    async def _query_database_tables(self, cluster: str, customer: str, material_type: str):
         """
         Concurrently query the database tables: customers, supplier, material_security_group
         
         Args:
             cluster: Cluster identifier
             customer: Customer identifier
+            material_type: Material type identifier
         """
         try:
             # Create a new database session for this background task
@@ -105,14 +110,15 @@ class ExtractionService:
                     FROM material_security_group
                     WHERE cluster ILIKE :cluster 
                       AND customer ILIKE :customer
+                      AND material_type ILIKE :material_type
                 """)
                 
                 # Execute all three queries concurrently
-                print("Starting concurrent queries to database...")
+                # print(f"Starting concurrent queries to database with material_type: {material_type}...")
                 
                 customers_task = session.execute(customers_query, {"cluster": cluster, "customer": customer})
                 supplier_task = session.execute(supplier_query, {"cluster": cluster})
-                material_security_group_task = session.execute(material_security_group_query, {"cluster": cluster, "customer": customer})
+                material_security_group_task = session.execute(material_security_group_query, {"cluster": cluster, "customer": customer, "material_type": material_type})
                 
                 # Wait for all queries to complete
                 customers_result, supplier_result, material_security_group_result = await asyncio.gather(
@@ -122,49 +128,289 @@ class ExtractionService:
                     return_exceptions=True
                 )
                 
-                # Process results
-                print("=== Database Query Results ===")
+                # Process results and store in Redis
+                # print("=== Database Query Results ===")
                 
                 # Process customers result
                 if isinstance(customers_result, Exception):
-                    print(f"Customers query failed: {customers_result}")
+                    # print(f"Customers query failed: {customers_result}")
+                    customers_rows = []
                 else:
                     customers_rows = customers_result.fetchall()
-                    print(f"Customers table: {len(customers_rows)} rows retrieved")
-                    # Optionally print first few rows for debugging
-                    for i, row in enumerate(customers_rows[:3]):  # Show first 3 rows
-                        print(f"  Customer {i+1}: {dict(row._mapping)}")
-                    if len(customers_rows) > 3:
-                        print(f"  ... and {len(customers_rows) - 3} more rows")
+                    # print(f"Customers table: {len(customers_rows)} rows retrieved")
+                    # # Optionally print first few rows for debugging
+                    # for i, row in enumerate(customers_rows[:3]):  # Show first 3 rows
+                    #     print(f"  Customer {i+1}: {dict(row._mapping)}")
+                    # if len(customers_rows) > 3:
+                    #     print(f"  ... and {len(customers_rows) - 3} more rows")
                 
                 # Process supplier result
                 if isinstance(supplier_result, Exception):
-                    print(f"Supplier query failed: {supplier_result}")
+                    # print(f"Supplier query failed: {supplier_result}")
+                    supplier_rows = []
                 else:
                     supplier_rows = supplier_result.fetchall()
-                    print(f"Supplier table: {len(supplier_rows)} rows retrieved")
-                    # Optionally print first few rows for debugging
-                    for i, row in enumerate(supplier_rows[:3]):  # Show first 3 rows
-                        print(f"  Supplier {i+1}: {dict(row._mapping)}")
-                    if len(supplier_rows) > 3:
-                        print(f"  ... and {len(supplier_rows) - 3} more rows")
+                    # print(f"Supplier table: {len(supplier_rows)} rows retrieved")
+                    # # Optionally print first few rows for debugging
+                    # for i, row in enumerate(supplier_rows[:3]):  # Show first 3 rows
+                    #     print(f"  Supplier {i+1}: {dict(row._mapping)}")
+                    # if len(supplier_rows) > 3:
+                    #     print(f"  ... and {len(supplier_rows) - 3} more rows")
                 
                 # Process material_security_group result
                 if isinstance(material_security_group_result, Exception):
-                    print(f"Material security group query failed: {material_security_group_result}")
+                    # print(f"Material security group query failed: {material_security_group_result}")
+                    material_security_group_rows = []
                 else:
                     material_security_group_rows = material_security_group_result.fetchall()
-                    print(f"Material security group table: {len(material_security_group_rows)} rows retrieved")
-                    # Optionally print first few rows for debugging
-                    for i, row in enumerate(material_security_group_rows[:3]):  # Show first 3 rows
-                        print(f"  Material security group {i+1}: {dict(row._mapping)}")
-                    if len(material_security_group_rows) > 3:
-                        print(f"  ... and {len(material_security_group_rows) - 3} more rows")
+                    # print(f"Material security group table: {len(material_security_group_rows)} rows retrieved")
+                    # # Optionally print first few rows for debugging
+                    # for i, row in enumerate(material_security_group_rows[:3]):  # Show first 3 rows
+                    #     print(f"  Material security group {i+1}: {dict(row._mapping)}")
+                    # if len(material_security_group_rows) > 3:
+                    #     print(f"  ... and {len(material_security_group_rows) - 3} more rows")
                 
-                print("=== End Database Query Results ===")
+                # Store results in Redis as hashmaps
+                await self._store_table_results_in_redis(
+                    cluster, customer, material_type,
+                    customers_rows, supplier_rows, material_security_group_rows
+                )
+                
+                # print("=== End Database Query Results ===")
                 
         except Exception as e:
-            print(f"Error querying database tables: {e}")
+            # print(f"Error querying database tables: {e}")
+            pass
+
+    async def _store_table_results_in_redis(
+        self, 
+        cluster: str, 
+        customer: str, 
+        material_type: str,
+        customers_rows: List,
+        supplier_rows: List, 
+        material_security_group_rows: List
+    ):
+        """
+        Store database table results in Redis as hashmaps for easy retrieval
+        
+        Args:
+            cluster: Cluster identifier
+            customer: Customer identifier  
+            material_type: Material type identifier
+            customers_rows: Results from customers table
+            supplier_rows: Results from supplier table
+            material_security_group_rows: Results from material_security_group table
+        """
+        if not REDIS_AVAILABLE or not REDIS_CLIENT:
+            return
+            
+        try:
+            # Create a unique key prefix for this query
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            key_prefix = f"db_query:{cluster}:{customer}:{material_type}:{timestamp}"
+            
+            # Store customers table results
+            customers_hash_key = f"{key_prefix}:customers"
+            if customers_rows:
+                # Convert each row to a dictionary and store as hash fields
+                for idx, row in enumerate(customers_rows):
+                    row_data = dict(row._mapping)
+                    # Convert any non-string values to JSON strings
+                    row_json = {k: json.dumps(v) if not isinstance(v, str) else str(v) 
+                               for k, v in row_data.items()}
+                    REDIS_CLIENT.hset(customers_hash_key, f"row_{idx}", json.dumps(row_json))
+                
+                # Store metadata
+                REDIS_CLIENT.hset(customers_hash_key, "table_name", "customers")
+                REDIS_CLIENT.hset(customers_hash_key, "row_count", str(len(customers_rows)))
+                REDIS_CLIENT.hset(customers_hash_key, "query_timestamp", timestamp)
+                REDIS_CLIENT.hset(customers_hash_key, "cluster", cluster)
+                REDIS_CLIENT.hset(customers_hash_key, "customer", customer)
+                REDIS_CLIENT.hset(customers_hash_key, "material_type", material_type)
+                
+                # Set expiration (24 hours)
+                REDIS_CLIENT.expire(customers_hash_key, 86400)
+            
+            # Store supplier table results
+            supplier_hash_key = f"{key_prefix}:supplier"
+            if supplier_rows:
+                for idx, row in enumerate(supplier_rows):
+                    row_data = dict(row._mapping)
+                    row_json = {k: json.dumps(v) if not isinstance(v, str) else str(v) 
+                               for k, v in row_data.items()}
+                    REDIS_CLIENT.hset(supplier_hash_key, f"row_{idx}", json.dumps(row_json))
+                
+                # Store metadata
+                REDIS_CLIENT.hset(supplier_hash_key, "table_name", "supplier")
+                REDIS_CLIENT.hset(supplier_hash_key, "row_count", str(len(supplier_rows)))
+                REDIS_CLIENT.hset(supplier_hash_key, "query_timestamp", timestamp)
+                REDIS_CLIENT.hset(supplier_hash_key, "cluster", cluster)
+                REDIS_CLIENT.hset(supplier_hash_key, "customer", customer)
+                REDIS_CLIENT.hset(supplier_hash_key, "material_type", material_type)
+                
+                # Set expiration (24 hours)
+                REDIS_CLIENT.expire(supplier_hash_key, 86400)
+            
+            # Store material_security_group table results
+            msg_hash_key = f"{key_prefix}:material_security_group"
+            if material_security_group_rows:
+                for idx, row in enumerate(material_security_group_rows):
+                    row_data = dict(row._mapping)
+                    row_json = {k: json.dumps(v) if not isinstance(v, str) else str(v) 
+                               for k, v in row_data.items()}
+                    REDIS_CLIENT.hset(msg_hash_key, f"row_{idx}", json.dumps(row_json))
+                
+                # Store metadata
+                REDIS_CLIENT.hset(msg_hash_key, "table_name", "material_security_group")
+                REDIS_CLIENT.hset(msg_hash_key, "row_count", str(len(material_security_group_rows)))
+                REDIS_CLIENT.hset(msg_hash_key, "query_timestamp", timestamp)
+                REDIS_CLIENT.hset(msg_hash_key, "cluster", cluster)
+                REDIS_CLIENT.hset(msg_hash_key, "customer", customer)
+                REDIS_CLIENT.hset(msg_hash_key, "material_type", material_type)
+                
+                # Set expiration (24 hours)
+                REDIS_CLIENT.expire(msg_hash_key, 86400)
+            
+            # Store a master key that lists all the table keys for this query
+            master_key = f"{key_prefix}:master"
+            table_keys = {
+                "customers": customers_hash_key if customers_rows else None,
+                "supplier": supplier_hash_key if supplier_rows else None, 
+                "material_security_group": msg_hash_key if material_security_group_rows else None
+            }
+            # Remove None values
+            table_keys = {k: v for k, v in table_keys.items() if v is not None}
+            
+            REDIS_CLIENT.hset(master_key, "query_info", json.dumps({
+                "cluster": cluster,
+                "customer": customer,
+                "material_type": material_type,
+                "timestamp": timestamp,
+                "table_keys": table_keys
+            }))
+            REDIS_CLIENT.expire(master_key, 86400)
+            
+        except Exception as e:
+            # Silently handle Redis errors to not break the main flow
+            pass
+
+    def get_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None):
+        """
+        Retrieve database table results from Redis hashmaps
+        
+        Args:
+            cluster: Cluster identifier
+            customer: Customer identifier  
+            material_type: Material type identifier
+            timestamp: Optional timestamp, if None will try to find the latest
+            
+        Returns:
+            dict: Dictionary containing the table results or None if not found
+        """
+        if not REDIS_AVAILABLE or not REDIS_CLIENT:
+            return None
+            
+        try:
+            # If no timestamp provided, try to find keys with pattern
+            if not timestamp:
+                pattern = f"db_query:{cluster}:{customer}:{material_type}:*:master"
+                master_keys = REDIS_CLIENT.keys(pattern)
+                if not master_keys:
+                    return None
+                # Get the most recent one (keys are sorted by timestamp)
+                master_key = sorted(master_keys)[-1].decode('utf-8')
+            else:
+                master_key = f"db_query:{cluster}:{customer}:{material_type}:{timestamp}:master"
+            
+            # Get the master information
+            master_info = REDIS_CLIENT.hget(master_key, "query_info")
+            if not master_info:
+                return None
+                
+            query_info = json.loads(master_info.decode('utf-8'))
+            table_keys = query_info.get("table_keys", {})
+            
+            results = {
+                "query_info": query_info,
+                "tables": {}
+            }
+            
+            # Retrieve each table's data
+            for table_name, hash_key in table_keys.items():
+                table_data = REDIS_CLIENT.hgetall(hash_key)
+                if table_data:
+                    # Decode and organize the data
+                    decoded_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in table_data.items()}
+                    
+                    # Extract rows and metadata
+                    rows = []
+                    metadata = {}
+                    
+                    for key, value in decoded_data.items():
+                        if key.startswith('row_'):
+                            rows.append(json.loads(value))
+                        else:
+                            metadata[key] = value
+                    
+                    results["tables"][table_name] = {
+                        "rows": rows,
+                        "metadata": metadata
+                    }
+            
+            return results
+            
+        except Exception as e:
+            return None
+
+    def get_all_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None):
+        """
+        Retrieve all database table results (customers, suppliers, material_security_groups) from Redis
+        
+        Args:
+            cluster: Cluster identifier
+            customer: Customer identifier  
+            material_type: Material type identifier
+            timestamp: Optional timestamp, if None will try to find the latest
+            
+        Returns:
+            dict: Dictionary containing all table results with keys 'customers', 'suppliers', 'material_security_groups'
+                  Returns None if no data found
+        """
+        if not REDIS_AVAILABLE or not REDIS_CLIENT:
+            return None
+            
+        try:
+            # Get the full results using the existing method
+            redis_results = self.get_table_results_from_redis(cluster, customer, material_type, timestamp)
+            
+            if not redis_results or "tables" not in redis_results:
+                return None
+            
+            # Extract and organize the data for easy access
+            all_results = {
+                "query_info": redis_results.get("query_info", {}),
+                "customers": [],
+                "suppliers": [],
+                "material_security_groups": []
+            }
+            
+            # Extract customers data
+            if "customers" in redis_results["tables"]:
+                all_results["customers"] = redis_results["tables"]["customers"]["rows"]
+            
+            # Extract supplier data (note: Redis stores as "supplier" but we return as "suppliers")
+            if "supplier" in redis_results["tables"]:
+                all_results["suppliers"] = redis_results["tables"]["supplier"]["rows"]
+            
+            # Extract material_security_group data (return as "material_security_groups")
+            if "material_security_group" in redis_results["tables"]:
+                all_results["material_security_groups"] = redis_results["tables"]["material_security_group"]["rows"]
+            
+            return all_results
+            
+        except Exception as e:
+            return None
 
     async def create_extraction_with_document(
         self, 
@@ -172,7 +418,8 @@ class ExtractionService:
         filename: str,
         file_size: int,
         cluster: Optional[str] = None,
-        customer: Optional[str] = None
+        customer: Optional[str] = None,
+        material_type: Optional[str] = None
     ) -> Tuple[Extraction, Document]:
         """
         Create a document and extraction record, process with Mistral
@@ -183,6 +430,7 @@ class ExtractionService:
             file_size: File size in bytes
             cluster: Optional cluster identifier
             customer: Optional customer identifier
+            material_type: Optional material type identifier
             
         Returns:
             Tuple of (Extraction, Document) records
@@ -209,7 +457,8 @@ class ExtractionService:
             current_step="document_upload",
             status="uploaded",
             cluster=cluster,
-            customer=customer
+            customer=customer,
+            material_type=material_type
         )
         self.session.add(extraction)
         await self.session.flush()  # Get the ID without committing
