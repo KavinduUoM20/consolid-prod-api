@@ -117,7 +117,7 @@ class ExtractionService:
                 """)
                 supplier_query = text("""
                     SELECT *
-                    FROM supplier
+                    FROM suppliers
                     WHERE cluster ILIKE '%' || :cluster || '%'
                 """)
                 material_security_group_query = text("""
