@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from apps.dociq.db import get_dociq_session
 from apps.dociq.services.extraction_service import ExtractionService
 from apps.dociq.schemas.extraction import ExtractionRead
+from apps.dociq.llm.prompt_utils import process_content_enhancement
 
 router = APIRouter()
 
@@ -49,6 +50,7 @@ class EnhanceExtractionResponse(BaseModel):
     message: str
     data: Dict[str, Any]
     redis_data: Optional[Dict[str, Any]] = None
+    llm_enhancement: Optional[str] = None
 
 
 async def get_extraction_service(session: AsyncSession = Depends(get_dociq_session)) -> ExtractionService:
@@ -384,11 +386,29 @@ async def enhance_extraction(
         if redis_data:
             print(f"Redis data contains: {list(redis_data.keys())}")
         
+        # Process LLM enhancement with target mappings and Redis data
+        llm_enhancement_response = None
+        try:
+            target_mappings = request.data.get('target_mappings', [])
+            print(f"Calling LLM enhancement with {len(target_mappings)} target mappings and Redis data")
+            
+            llm_enhancement_response = await process_content_enhancement(
+                target_mappings=target_mappings,
+                redis_data=redis_data
+            )
+            
+            print(f"LLM enhancement completed successfully")
+            
+        except Exception as e:
+            print(f"LLM enhancement failed: {e}")
+            llm_enhancement_response = f"Enhancement failed: {str(e)}"
+        
         return EnhanceExtractionResponse(
             extraction_id=extraction_id,
             message=message,
             data=request.data,  # ✅ Original target data from request
-            redis_data=redis_data  # ✅ Related Redis data (customers, suppliers, material_security_groups)
+            redis_data=redis_data,  # ✅ Related Redis data (customers, suppliers, material_security_groups)
+            llm_enhancement=llm_enhancement_response  # ✅ LLM enhancement response
         )
         
     except HTTPException:

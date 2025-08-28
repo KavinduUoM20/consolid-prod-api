@@ -32,6 +32,24 @@ def get_content_mapper_template() -> str:
     return template_content
 
 
+def get_content_enhancer_template() -> str:
+    """
+    Read the content enhancer Jinja template from prompts/content_enhancer.j2
+    
+    Returns:
+        The template content as a string
+    """
+    # Get the path to the prompts directory
+    prompts_dir = Path(__file__).parent.parent / "prompts"
+    template_path = prompts_dir / "content_enhancer.j2"
+    
+    # Read the template file
+    with open(template_path, 'r', encoding='utf-8') as f:
+        template_content = f.read()
+    
+    return template_content
+
+
 async def get_document_content(session: AsyncSession, document_id: UUID) -> str:
     """
     Get document details and return the content of the file stored in doc_path
@@ -164,6 +182,40 @@ async def process_content_mapping(document_id: UUID, template_id: UUID, session:
     target_mapping = await parse_llm_response(response_data)
     
     return target_mapping
+
+
+async def process_content_enhancement(target_mappings: List[dict], redis_data: dict = None):
+    """
+    Process content enhancement with target mappings and Redis data
+    
+    Args:
+        target_mappings: List of target mapping dictionaries
+        redis_data: Dictionary containing Redis table results
+        
+    Returns:
+        LLM enhancement response
+    """
+    # Get the Jinja template
+    template_content = get_content_enhancer_template()
+    
+    # Set up Jinja environment and render template
+    jinja_env = Environment(autoescape=False)
+    template = jinja_env.from_string(template_content)
+    
+    # Prepare data for template rendering
+    template_data = {
+        "target_mappings": target_mappings,
+        "redis_data": redis_data or {},
+        "has_redis_data": redis_data is not None
+    }
+    
+    # Render template with the data
+    rendered_prompt = template.render(**template_data)
+    
+    # Call LLM using llm_connections.py
+    response = ask_llm(rendered_prompt)
+    
+    return response
 
 
 async def parse_llm_response(response_data: dict) -> TargetMapping:
