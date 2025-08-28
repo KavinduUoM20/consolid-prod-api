@@ -309,26 +309,22 @@ async def enhance_extraction(
     - Returns the same data object from the request body plus Redis table results
     """
     try:
-        # Extract cluster, customer, and material_type from the target_mappings
-        target_mappings = request.data.get('target_mappings', [])
+        # Get the extraction record to retrieve the original cluster, customer, and material_type
+        # These were set from HTTP headers during document upload and used by background task
+        extraction = await extraction_service.get_extraction_by_id(extraction_id)
+        if not extraction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Extraction {extraction_id} not found"
+            )
         
-        # Extract values from target mappings
-        cluster = None
-        customer = None
-        material_type = None
+        # Use the original parameters from the extraction record (from HTTP headers)
+        # This ensures we use the same values that the background task used to store Redis data
+        cluster = extraction.cluster      # From X-Cluster header
+        customer = extraction.customer    # From X-Customer header  
+        material_type = extraction.material_type  # From X-Material-Type header
         
-        for mapping in target_mappings:
-            field = mapping.get('target_field', '').lower()
-            value = mapping.get('target_value')
-            
-            if field == 'cluster' and value and value != "can't specify":
-                cluster = value
-            elif field == 'customer' and value and value != "can't specify":
-                customer = value
-            elif field in ['material type', 'material_type'] and value and value != "can't specify":
-                material_type = value
-        
-        print(f"Extracted from target_mappings - Cluster: {cluster}, Customer: {customer}, Material Type: {material_type}")
+        print(f"Using extraction record parameters - Cluster: {cluster}, Customer: {customer}, Material Type: {material_type}")
         
         # Fetch Redis table results if we have the required parameters
         redis_data = None
@@ -338,6 +334,7 @@ async def enhance_extraction(
                 customer=customer,
                 material_type=material_type
             )
+            print(f"Redis lookup successful: found {len(redis_data.get('customers', []))} customers, {len(redis_data.get('suppliers', []))} suppliers, {len(redis_data.get('material_security_groups', []))} security groups" if redis_data else "Redis lookup returned no data")
         else:
             print(f"Missing required parameters for Redis lookup: cluster={cluster}, customer={customer}, material_type={material_type}")
         
