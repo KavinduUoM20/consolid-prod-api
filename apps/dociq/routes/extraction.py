@@ -309,22 +309,37 @@ async def enhance_extraction(
     - Returns the same data object from the request body plus Redis table results
     """
     try:
-        # Get the extraction record to retrieve cluster, customer, and material_type
-        extraction = await extraction_service.get_extraction_by_id(extraction_id)
-        if not extraction:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Extraction {extraction_id} not found"
-            )
+        # Extract cluster, customer, and material_type from the target_mappings
+        target_mappings = request.data.get('target_mappings', [])
+        
+        # Extract values from target mappings
+        cluster = None
+        customer = None
+        material_type = None
+        
+        for mapping in target_mappings:
+            field = mapping.get('target_field', '').lower()
+            value = mapping.get('target_value')
+            
+            if field == 'cluster' and value and value != "can't specify":
+                cluster = value
+            elif field == 'customer' and value and value != "can't specify":
+                customer = value
+            elif field in ['material type', 'material_type'] and value and value != "can't specify":
+                material_type = value
+        
+        print(f"Extracted from target_mappings - Cluster: {cluster}, Customer: {customer}, Material Type: {material_type}")
         
         # Fetch Redis table results if we have the required parameters
         redis_data = None
-        if extraction.cluster and extraction.customer and extraction.material_type:
+        if cluster and customer and material_type:
             redis_data = extraction_service.get_all_table_results_from_redis(
-                cluster=extraction.cluster,
-                customer=extraction.customer,
-                material_type=extraction.material_type
+                cluster=cluster,
+                customer=customer,
+                material_type=material_type
             )
+        else:
+            print(f"Missing required parameters for Redis lookup: cluster={cluster}, customer={customer}, material_type={material_type}")
         
         # Prepare response message
         message = "Extraction enhancement completed successfully"
@@ -336,11 +351,17 @@ async def enhance_extraction(
         else:
             message += " (no Redis data available)"
         
+        # Log what we're returning
+        print(f"Returning target data fields: {list(request.data.keys())}")
+        print(f"Redis data available: {redis_data is not None}")
+        if redis_data:
+            print(f"Redis data contains: {list(redis_data.keys())}")
+        
         return EnhanceExtractionResponse(
             extraction_id=extraction_id,
             message=message,
-            data=request.data,
-            redis_data=redis_data
+            data=request.data,  # ✅ Original target data from request
+            redis_data=redis_data  # ✅ Related Redis data (customers, suppliers, material_security_groups)
         )
         
     except HTTPException:
@@ -349,6 +370,45 @@ async def enhance_extraction(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to enhance extraction: {str(e)}"
+        )
+
+
+@router.get("/extractions/")
+async def list_extractions(
+    limit: Optional[int] = Query(10, description="Number of extractions to return"),
+    offset: Optional[int] = Query(0, description="Number of extractions to skip"),
+    extraction_service: ExtractionService = Depends(get_extraction_service)
+):
+    """
+    List extractions for debugging purposes
+    
+    - **limit**: Maximum number of extractions to return (default: 10)
+    - **offset**: Number of extractions to skip (default: 0)
+    """
+    try:
+        extractions = await extraction_service.get_all_extractions(limit=limit, offset=offset)
+        
+        return {
+            "total_returned": len(extractions),
+            "extractions": [
+                {
+                    "id": str(extraction.id),
+                    "status": extraction.status,
+                    "current_step": extraction.current_step,
+                    "cluster": extraction.cluster,
+                    "customer": extraction.customer,
+                    "material_type": extraction.material_type,
+                    "created_at": extraction.created_at,
+                    "document_id": str(extraction.document_id) if extraction.document_id else None
+                }
+                for extraction in extractions
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list extractions: {str(e)}"
         )
 
 
