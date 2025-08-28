@@ -309,20 +309,36 @@ async def enhance_extraction(
     - Returns the same data object from the request body plus Redis table results
     """
     try:
-        # Get the extraction record to retrieve the original cluster, customer, and material_type
-        # These were set from HTTP headers during document upload and used by background task
+        # Get the extraction record - it should always exist with cluster, customer, material_type
         extraction = await extraction_service.get_extraction_by_id(extraction_id)
+        
         if not extraction:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Extraction {extraction_id} not found"
             )
         
-        # Use the original parameters from the extraction record (from HTTP headers)
-        # This ensures we use the same values that the background task used to store Redis data
-        cluster = extraction.cluster      # From X-Cluster header
-        customer = extraction.customer    # From X-Customer header  
-        material_type = extraction.material_type  # From X-Material-Type header
+        # Debug: Show all extraction fields
+        print(f"Extraction record found:")
+        print(f"  - ID: {extraction.id}")
+        print(f"  - cluster: '{extraction.cluster}'")
+        print(f"  - customer: '{extraction.customer}'")
+        print(f"  - material_type: '{extraction.material_type}'")
+        print(f"  - status: '{extraction.status}'")
+        print(f"  - current_step: '{extraction.current_step}'")
+        print(f"  - created_at: {extraction.created_at}")
+        
+        # Use the parameters from the extraction record
+        cluster = extraction.cluster
+        customer = extraction.customer  
+        material_type = extraction.material_type
+        
+        # Validate that we have the required parameters
+        if not cluster or not customer or not material_type:
+            print(f"WARNING: Extraction record missing required fields!")
+            print(f"  - cluster: {'✓' if cluster else '✗'} '{cluster}'")
+            print(f"  - customer: {'✓' if customer else '✗'} '{customer}'")
+            print(f"  - material_type: {'✓' if material_type else '✗'} '{material_type}'")
         
         print(f"Using extraction record parameters - Cluster: {cluster}, Customer: {customer}, Material Type: {material_type}")
         
@@ -385,21 +401,56 @@ async def list_extractions(
     try:
         extractions = await extraction_service.get_all_extractions(limit=limit, offset=offset)
         
-        return {
-            "total_returned": len(extractions),
-            "extractions": [
-                {
+        # Debug: Check if material_type attribute exists and database schema
+        if extractions:
+            sample_extraction = extractions[0]
+            print(f"Sample extraction attributes: {dir(sample_extraction)}")
+            print(f"Has material_type attribute: {hasattr(sample_extraction, 'material_type')}")
+            if hasattr(sample_extraction, 'material_type'):
+                print(f"material_type value: '{sample_extraction.material_type}'")
+            
+            # Check database schema for material_type column
+            try:
+                from sqlalchemy import text
+                session = extraction_service.session
+                schema_check = await session.execute(text("""
+                    SELECT column_name, data_type, is_nullable 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'extractions' 
+                    AND column_name = 'material_type'
+                """))
+                column_info = schema_check.fetchall()
+                if column_info:
+                    print(f"material_type column exists: {column_info[0]}")
+                else:
+                    print("material_type column does NOT exist in database schema")
+            except Exception as e:
+                print(f"Error checking schema: {e}")
+        
+        # Create response with explicit field access
+        extraction_list = []
+        for extraction in extractions:
+            try:
+                extraction_data = {
                     "id": str(extraction.id),
                     "status": extraction.status,
                     "current_step": extraction.current_step,
-                    "cluster": extraction.cluster,
-                    "customer": extraction.customer,
-                    "material_type": extraction.material_type,
+                    "cluster": getattr(extraction, 'cluster', 'ATTR_NOT_FOUND'),
+                    "customer": getattr(extraction, 'customer', 'ATTR_NOT_FOUND'),
+                    "material_type": getattr(extraction, 'material_type', 'ATTR_NOT_FOUND'),
                     "created_at": extraction.created_at,
-                    "document_id": str(extraction.document_id) if extraction.document_id else None
+                    "document_id": str(extraction.document_id) if extraction.document_id else None,
+                    "has_required_fields": bool(extraction.cluster and extraction.customer and extraction.material_type)
                 }
-                for extraction in extractions
-            ]
+                print(f"Extraction {extraction.id}: cluster='{extraction.cluster}', customer='{extraction.customer}', material_type='{extraction.material_type}'")
+                extraction_list.append(extraction_data)
+            except Exception as e:
+                print(f"Error processing extraction {extraction.id}: {e}")
+                extraction_list.append({"id": str(extraction.id), "error": str(e)})
+        
+        return {
+            "total_returned": len(extractions),
+            "extractions": extraction_list
         }
         
     except Exception as e:
