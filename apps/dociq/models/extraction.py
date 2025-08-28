@@ -38,12 +38,16 @@ class Extraction(SQLModel, table=True):
         sa_column=Column(pg.VARCHAR(50), nullable=True)
     )
 
-    # Cluster and customer information
+    # Cluster, customer, and material type information
     cluster: Optional[str] = Field(
         default=None,
         sa_column=Column(pg.VARCHAR(100), nullable=True)
     )
     customer: Optional[str] = Field(
+        default=None,
+        sa_column=Column(pg.VARCHAR(100), nullable=True)
+    )
+    material_type: Optional[str] = Field(
         default=None,
         sa_column=Column(pg.VARCHAR(100), nullable=True)
     )
