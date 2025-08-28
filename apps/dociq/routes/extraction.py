@@ -50,7 +50,7 @@ class EnhanceExtractionResponse(BaseModel):
     message: str
     data: Dict[str, Any]
     redis_data: Optional[Dict[str, Any]] = None
-    llm_enhancement: Optional[str] = None
+    llm_enhancement: Optional[Dict[str, Any]] = None
 
 
 async def get_extraction_service(session: AsyncSession = Depends(get_dociq_session)) -> ExtractionService:
@@ -397,11 +397,25 @@ async def enhance_extraction(
                 redis_data=redis_data
             )
             
-            print(f"LLM enhancement completed successfully")
-            
+            if llm_enhancement_response.get("status") == "success":
+                stats = llm_enhancement_response.get("enhancement_stats", {})
+                print(f"LLM enhancement completed successfully:")
+                print(f"  - Total fields: {llm_enhancement_response.get('total_fields', 0)}")
+                print(f"  - Original: {stats.get('original', 0)}")
+                print(f"  - Redis enhanced: {stats.get('redis_enhanced', 0)}")
+                print(f"  - Redis verified: {stats.get('redis_verified', 0)}")
+            else:
+                print(f"LLM enhancement had issues: {llm_enhancement_response.get('status')}")
+                
         except Exception as e:
             print(f"LLM enhancement failed: {e}")
-            llm_enhancement_response = f"Enhancement failed: {str(e)}"
+            llm_enhancement_response = {
+                "status": "error",
+                "error": str(e),
+                "enhanced_mappings": [],
+                "enhancement_stats": {"original": 0, "redis_enhanced": 0, "redis_verified": 0},
+                "total_fields": 0
+            }
         
         return EnhanceExtractionResponse(
             extraction_id=extraction_id,

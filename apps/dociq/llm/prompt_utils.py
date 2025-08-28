@@ -212,10 +212,88 @@ async def process_content_enhancement(target_mappings: List[dict], redis_data: d
     # Render template with the data
     rendered_prompt = template.render(**template_data)
     
+    # Log the rendered prompt for debugging
+    print("=== LLM Enhancement Prompt ===")
+    print(rendered_prompt[:500] + "..." if len(rendered_prompt) > 500 else rendered_prompt)
+    print("=== End Prompt ===")
+    
     # Call LLM using llm_connections.py
     response = ask_llm(rendered_prompt)
     
-    return response
+    print(f"=== LLM Raw Response ===")
+    print(response[:300] + "..." if len(response) > 300 else response)
+    print("=== End Raw Response ===")
+    
+    # Parse and clean the response
+    cleaned_response = parse_llm_enhancement_response(response)
+    
+    return cleaned_response
+
+
+def parse_llm_enhancement_response(raw_response: str) -> dict:
+    """
+    Parse and clean the LLM enhancement response to extract structured JSON
+    
+    Args:
+        raw_response: Raw response from LLM which may contain markdown code blocks
+        
+    Returns:
+        dict: Structured response with parsed JSON and metadata
+    """
+    try:
+        # Remove markdown code blocks if present
+        cleaned_response = raw_response.strip()
+        
+        # Check if response is wrapped in markdown code blocks
+        if cleaned_response.startswith('```json') and cleaned_response.endswith('```'):
+            # Extract JSON from markdown code block
+            cleaned_response = cleaned_response[7:-3].strip()  # Remove ```json and ```
+        elif cleaned_response.startswith('```') and cleaned_response.endswith('```'):
+            # Extract content from generic code block
+            cleaned_response = cleaned_response[3:-3].strip()  # Remove ``` and ```
+        
+        # Try to parse as JSON
+        try:
+            enhanced_mappings = json.loads(cleaned_response)
+            
+            # Validate that it's a list of mappings
+            if not isinstance(enhanced_mappings, list):
+                raise ValueError("Enhanced mappings must be a JSON array")
+            
+            # Count enhancements
+            enhancement_stats = {
+                "original": 0,
+                "redis_enhanced": 0,
+                "redis_verified": 0
+            }
+            
+            for mapping in enhanced_mappings:
+                confidence = mapping.get("target_confidence", "original")
+                if confidence in enhancement_stats:
+                    enhancement_stats[confidence] += 1
+            
+            return {
+                "status": "success",
+                "enhanced_mappings": enhanced_mappings,
+                "enhancement_stats": enhancement_stats,
+                "total_fields": len(enhanced_mappings)
+            }
+            
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse LLM response as JSON: {e}")
+            return {
+                "status": "parse_error",
+                "error": f"JSON parsing failed: {str(e)}",
+                "raw_response": raw_response[:200] + "..." if len(raw_response) > 200 else raw_response
+            }
+    
+    except Exception as e:
+        print(f"Error processing LLM enhancement response: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "raw_response": raw_response[:200] + "..." if len(raw_response) > 200 else raw_response
+        }
 
 
 async def parse_llm_response(response_data: dict) -> TargetMapping:
