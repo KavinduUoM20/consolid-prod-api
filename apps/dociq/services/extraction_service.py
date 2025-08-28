@@ -362,7 +362,7 @@ class ExtractionService:
             # Silently handle Redis errors to not break the main flow
             pass
 
-    def get_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None):
+    def get_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None, supplier_name: str = None):
         """
         Retrieve database table results from Redis hashmaps
         
@@ -371,6 +371,7 @@ class ExtractionService:
             customer: Customer identifier  
             material_type: Material type identifier
             timestamp: Optional timestamp, if None will try to find the latest
+            supplier_name: Optional supplier name to filter suppliers data
             
         Returns:
             dict: Dictionary containing the table results or None if not found
@@ -416,9 +417,25 @@ class ExtractionService:
                     
                     if "data" in decoded_data:
                         rows = json.loads(decoded_data["data"])
+                        
+                        # Filter suppliers data by supplier_name if provided
+                        if table_name == "supplier" and supplier_name:
+                            filtered_rows = []
+                            for row in rows:
+                                # Check if any field contains the supplier_name (case insensitive)
+                                for field_value in row.values():
+                                    if isinstance(field_value, str) and supplier_name.lower() in field_value.lower():
+                                        filtered_rows.append(row)
+                                        break
+                            rows = filtered_rows
                     
                     if "metadata" in decoded_data:
                         metadata = json.loads(decoded_data["metadata"])
+                        
+                        # Update metadata row count if suppliers were filtered
+                        if table_name == "supplier" and supplier_name:
+                            metadata["filtered_by_supplier_name"] = supplier_name
+                            metadata["filtered_row_count"] = len(rows)
                     
                     results["tables"][table_name] = {
                         "rows": rows,
@@ -430,7 +447,7 @@ class ExtractionService:
         except Exception as e:
             return None
 
-    def get_all_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None):
+    def get_all_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None, supplier_name: str = None):
         """
         Retrieve all database table results (customers, suppliers, material_security_groups) from Redis
         
@@ -439,6 +456,7 @@ class ExtractionService:
             customer: Customer identifier  
             material_type: Material type identifier
             timestamp: Optional timestamp, if None will try to find the latest
+            supplier_name: Optional supplier name to filter suppliers data
             
         Returns:
             dict: Dictionary containing all table results with keys 'customers', 'suppliers', 'material_security_groups'
@@ -449,7 +467,7 @@ class ExtractionService:
             
         try:
             # Get the full results using the existing method
-            redis_results = self.get_table_results_from_redis(cluster, customer, material_type, timestamp)
+            redis_results = self.get_table_results_from_redis(cluster, customer, material_type, timestamp, supplier_name)
             
             if not redis_results or "tables" not in redis_results:
                 return None
