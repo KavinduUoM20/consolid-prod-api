@@ -233,21 +233,33 @@ class ExtractionService:
             # Store customers table results
             customers_hash_key = f"{key_prefix}:customers"
             if customers_rows:
-                # Convert each row to a dictionary and store as hash fields
-                for idx, row in enumerate(customers_rows):
+                # Convert rows to clean JSON array
+                rows_data = []
+                for row in customers_rows:
                     row_data = dict(row._mapping)
-                    # Convert any non-string values to JSON strings
-                    row_json = {k: json.dumps(v) if not isinstance(v, str) else str(v) 
-                               for k, v in row_data.items()}
-                    REDIS_CLIENT.hset(customers_hash_key, f"row_{idx}", json.dumps(row_json))
+                    # Convert non-serializable types to strings
+                    clean_row = {}
+                    for k, v in row_data.items():
+                        if v is None:
+                            clean_row[k] = None
+                        elif isinstance(v, (str, int, float, bool)):
+                            clean_row[k] = v
+                        else:
+                            clean_row[k] = str(v)
+                    rows_data.append(clean_row)
                 
-                # Store metadata
-                REDIS_CLIENT.hset(customers_hash_key, "table_name", "customers")
-                REDIS_CLIENT.hset(customers_hash_key, "row_count", str(len(customers_rows)))
-                REDIS_CLIENT.hset(customers_hash_key, "query_timestamp", timestamp)
-                REDIS_CLIENT.hset(customers_hash_key, "cluster", cluster)
-                REDIS_CLIENT.hset(customers_hash_key, "customer", customer)
-                REDIS_CLIENT.hset(customers_hash_key, "material_type", material_type)
+                # Store as clean JSON
+                REDIS_CLIENT.hset(customers_hash_key, "data", json.dumps(rows_data))
+                REDIS_CLIENT.hset(customers_hash_key, "metadata", json.dumps({
+                    "table_name": "customers",
+                    "row_count": len(customers_rows),
+                    "query_timestamp": timestamp,
+                    "query_params": {
+                        "cluster": cluster,
+                        "customer": customer,
+                        "material_type": material_type
+                    }
+                }))
                 
                 # Set expiration (24 hours)
                 REDIS_CLIENT.expire(customers_hash_key, 86400)
@@ -255,19 +267,33 @@ class ExtractionService:
             # Store supplier table results
             supplier_hash_key = f"{key_prefix}:supplier"
             if supplier_rows:
-                for idx, row in enumerate(supplier_rows):
+                # Convert rows to clean JSON array
+                rows_data = []
+                for row in supplier_rows:
                     row_data = dict(row._mapping)
-                    row_json = {k: json.dumps(v) if not isinstance(v, str) else str(v) 
-                               for k, v in row_data.items()}
-                    REDIS_CLIENT.hset(supplier_hash_key, f"row_{idx}", json.dumps(row_json))
+                    # Convert non-serializable types to strings
+                    clean_row = {}
+                    for k, v in row_data.items():
+                        if v is None:
+                            clean_row[k] = None
+                        elif isinstance(v, (str, int, float, bool)):
+                            clean_row[k] = v
+                        else:
+                            clean_row[k] = str(v)
+                    rows_data.append(clean_row)
                 
-                # Store metadata
-                REDIS_CLIENT.hset(supplier_hash_key, "table_name", "supplier")
-                REDIS_CLIENT.hset(supplier_hash_key, "row_count", str(len(supplier_rows)))
-                REDIS_CLIENT.hset(supplier_hash_key, "query_timestamp", timestamp)
-                REDIS_CLIENT.hset(supplier_hash_key, "cluster", cluster)
-                REDIS_CLIENT.hset(supplier_hash_key, "customer", customer)
-                REDIS_CLIENT.hset(supplier_hash_key, "material_type", material_type)
+                # Store as clean JSON
+                REDIS_CLIENT.hset(supplier_hash_key, "data", json.dumps(rows_data))
+                REDIS_CLIENT.hset(supplier_hash_key, "metadata", json.dumps({
+                    "table_name": "supplier",
+                    "row_count": len(supplier_rows),
+                    "query_timestamp": timestamp,
+                    "query_params": {
+                        "cluster": cluster,
+                        "customer": customer,
+                        "material_type": material_type
+                    }
+                }))
                 
                 # Set expiration (24 hours)
                 REDIS_CLIENT.expire(supplier_hash_key, 86400)
@@ -275,19 +301,33 @@ class ExtractionService:
             # Store material_security_group table results
             msg_hash_key = f"{key_prefix}:material_security_group"
             if material_security_group_rows:
-                for idx, row in enumerate(material_security_group_rows):
+                # Convert rows to clean JSON array
+                rows_data = []
+                for row in material_security_group_rows:
                     row_data = dict(row._mapping)
-                    row_json = {k: json.dumps(v) if not isinstance(v, str) else str(v) 
-                               for k, v in row_data.items()}
-                    REDIS_CLIENT.hset(msg_hash_key, f"row_{idx}", json.dumps(row_json))
+                    # Convert non-serializable types to strings
+                    clean_row = {}
+                    for k, v in row_data.items():
+                        if v is None:
+                            clean_row[k] = None
+                        elif isinstance(v, (str, int, float, bool)):
+                            clean_row[k] = v
+                        else:
+                            clean_row[k] = str(v)
+                    rows_data.append(clean_row)
                 
-                # Store metadata
-                REDIS_CLIENT.hset(msg_hash_key, "table_name", "material_security_group")
-                REDIS_CLIENT.hset(msg_hash_key, "row_count", str(len(material_security_group_rows)))
-                REDIS_CLIENT.hset(msg_hash_key, "query_timestamp", timestamp)
-                REDIS_CLIENT.hset(msg_hash_key, "cluster", cluster)
-                REDIS_CLIENT.hset(msg_hash_key, "customer", customer)
-                REDIS_CLIENT.hset(msg_hash_key, "material_type", material_type)
+                # Store as clean JSON
+                REDIS_CLIENT.hset(msg_hash_key, "data", json.dumps(rows_data))
+                REDIS_CLIENT.hset(msg_hash_key, "metadata", json.dumps({
+                    "table_name": "material_security_group",
+                    "row_count": len(material_security_group_rows),
+                    "query_timestamp": timestamp,
+                    "query_params": {
+                        "cluster": cluster,
+                        "customer": customer,
+                        "material_type": material_type
+                    }
+                }))
                 
                 # Set expiration (24 hours)
                 REDIS_CLIENT.expire(msg_hash_key, 86400)
@@ -367,18 +407,18 @@ class ExtractionService:
             for table_name, hash_key in table_keys.items():
                 table_data = REDIS_CLIENT.hgetall(hash_key)
                 if table_data:
-                    # Decode and organize the data
+                    # Decode the data
                     decoded_data = {k.decode('utf-8'): v.decode('utf-8') for k, v in table_data.items()}
                     
-                    # Extract rows and metadata
+                    # Extract data and metadata from new clean format
                     rows = []
                     metadata = {}
                     
-                    for key, value in decoded_data.items():
-                        if key.startswith('row_'):
-                            rows.append(json.loads(value))
-                        else:
-                            metadata[key] = value
+                    if "data" in decoded_data:
+                        rows = json.loads(decoded_data["data"])
+                    
+                    if "metadata" in decoded_data:
+                        metadata = json.loads(decoded_data["metadata"])
                     
                     results["tables"][table_name] = {
                         "rows": rows,
