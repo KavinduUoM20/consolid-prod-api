@@ -342,13 +342,27 @@ async def enhance_extraction(
         
         print(f"Using extraction record parameters - Cluster: {cluster}, Customer: {customer}, Material Type: {material_type}")
         
+        # Extract supplier from target_mappings in the request data
+        supplier_name = None
+        target_mappings = request.data.get('target_mappings', [])
+        for mapping in target_mappings:
+            field = mapping.get('target_field', '').lower()
+            value = mapping.get('target_value')
+            
+            if field == 'supplier' and value and value != "can't specify":
+                supplier_name = value
+                break
+        
+        print(f"Extracted supplier from target_mappings: '{supplier_name}'")
+        
         # Fetch Redis table results if we have the required parameters
         redis_data = None
         if cluster and customer and material_type:
             redis_data = extraction_service.get_all_table_results_from_redis(
                 cluster=cluster,
                 customer=customer,
-                material_type=material_type
+                material_type=material_type,
+                supplier_name=supplier_name
             )
             print(f"Redis lookup successful: found {len(redis_data.get('customers', []))} customers, {len(redis_data.get('suppliers', []))} suppliers, {len(redis_data.get('material_security_groups', []))} security groups" if redis_data else "Redis lookup returned no data")
         else:
