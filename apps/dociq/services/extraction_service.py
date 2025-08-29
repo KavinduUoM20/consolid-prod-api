@@ -537,7 +537,7 @@ class ExtractionService:
             # Silently handle Redis errors to not break the main flow
             pass
 
-    def get_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None, supplier_name: str = None):
+    def get_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None, supplier_name: str = None, short_code: str = None, fabric_content_code_description: str = None, material_group: str = None):
         """
         Retrieve database table results from Redis hashmaps
         
@@ -547,6 +547,9 @@ class ExtractionService:
             material_type: Material type identifier
             timestamp: Optional timestamp, if None will try to find the latest
             supplier_name: Optional supplier name to filter suppliers data
+            short_code: Optional short code to filter material_groups data
+            fabric_content_code_description: Optional fabric content code description to filter composition data
+            material_group: Optional material group to filter material_groups data
             
         Returns:
             dict: Dictionary containing the table results or None if not found
@@ -603,13 +606,57 @@ class ExtractionService:
                                         filtered_rows.append(row)
                                         break
                             rows = filtered_rows
+                        
+                        # Filter material_groups data by short_code or material_group if provided
+                        elif table_name == "material_groups" and (short_code or material_group):
+                            filtered_rows = []
+                            for row in rows:
+                                should_include = False
+                                
+                                # Filter by short_code if provided
+                                if short_code:
+                                    for field_value in row.values():
+                                        if isinstance(field_value, str) and short_code.lower() in field_value.lower():
+                                            should_include = True
+                                            break
+                                
+                                # Filter by material_group if provided and not already included
+                                if not should_include and material_group:
+                                    for field_value in row.values():
+                                        if isinstance(field_value, str) and material_group.lower() in field_value.lower():
+                                            should_include = True
+                                            break
+                                
+                                if should_include:
+                                    filtered_rows.append(row)
+                            rows = filtered_rows
+                        
+                        # Filter composition data by fabric_content_code_description if provided
+                        elif table_name == "composition" and fabric_content_code_description:
+                            filtered_rows = []
+                            for row in rows:
+                                # Check if any field contains the fabric_content_code_description (case insensitive)
+                                for field_value in row.values():
+                                    if isinstance(field_value, str) and fabric_content_code_description.lower() in field_value.lower():
+                                        filtered_rows.append(row)
+                                        break
+                            rows = filtered_rows
                     
                     if "metadata" in decoded_data:
                         metadata = json.loads(decoded_data["metadata"])
                         
-                        # Update metadata row count if suppliers were filtered
+                        # Update metadata row count if data was filtered
                         if table_name == "supplier" and supplier_name:
                             metadata["filtered_by_supplier_name"] = supplier_name
+                            metadata["filtered_row_count"] = len(rows)
+                        elif table_name == "material_groups" and (short_code or material_group):
+                            if short_code:
+                                metadata["filtered_by_short_code"] = short_code
+                            if material_group:
+                                metadata["filtered_by_material_group"] = material_group
+                            metadata["filtered_row_count"] = len(rows)
+                        elif table_name == "composition" and fabric_content_code_description:
+                            metadata["filtered_by_fabric_content_code_description"] = fabric_content_code_description
                             metadata["filtered_row_count"] = len(rows)
                     
                     results["tables"][table_name] = {
@@ -622,7 +669,7 @@ class ExtractionService:
         except Exception as e:
             return None
 
-    def get_all_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None, supplier_name: str = None):
+    def get_all_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None, supplier_name: str = None, short_code: str = None, fabric_content_code_description: str = None, material_group: str = None):
         """
         Retrieve all database table results (customers, suppliers, material_security_groups, material_groups, composition, fabric_contents) from Redis
         
@@ -632,6 +679,9 @@ class ExtractionService:
             material_type: Material type identifier
             timestamp: Optional timestamp, if None will try to find the latest
             supplier_name: Optional supplier name to filter suppliers data
+            short_code: Optional short code to filter material_groups data
+            fabric_content_code_description: Optional fabric content code description to filter composition data
+            material_group: Optional material group to filter material_groups data
             
         Returns:
             dict: Dictionary containing all table results with keys 'customers', 'suppliers', 'material_security_groups', 'material_groups', 'composition', 'fabric_contents'
@@ -642,7 +692,7 @@ class ExtractionService:
             
         try:
             # Get the full results using the existing method
-            redis_results = self.get_table_results_from_redis(cluster, customer, material_type, timestamp, supplier_name)
+            redis_results = self.get_table_results_from_redis(cluster, customer, material_type, timestamp, supplier_name, short_code, fabric_content_code_description, material_group)
             
             if not redis_results or "tables" not in redis_results:
                 return None

@@ -344,18 +344,32 @@ async def enhance_extraction(
         
         print(f"Using extraction record parameters - Cluster: {cluster}, Customer: {customer}, Material Type: {material_type}")
         
-        # Extract supplier from target_mappings in the request data
+        # Extract parameters from target_mappings in the request data
         supplier_name = None
+        short_code = None  # Material Sub Group -> short_code
+        fabric_content_code_description = None  # Composition -> fabric_content_code_description
+        material_group = None  # Material Description -> material_group
+        
         target_mappings = request.data.get('target_mappings', [])
         for mapping in target_mappings:
             field = mapping.get('target_field', '').lower()
             value = mapping.get('target_value')
             
-            if field == 'supplier' and value and value != "can't specify":
-                supplier_name = value
-                break
+            if value and value != "can't specify":
+                if field == 'supplier':
+                    supplier_name = value
+                elif field == 'material sub group':
+                    short_code = value
+                elif field == 'composition':
+                    fabric_content_code_description = value
+                elif field == 'material description':
+                    material_group = value
         
-        print(f"Extracted supplier from target_mappings: '{supplier_name}'")
+        print(f"Extracted parameters from target_mappings:")
+        print(f"  - supplier_name: '{supplier_name}'")
+        print(f"  - short_code (Material Sub Group): '{short_code}'")
+        print(f"  - fabric_content_code_description (Composition): '{fabric_content_code_description}'")
+        print(f"  - material_group (Material Description): '{material_group}'")
         
         # Fetch Redis table results if we have the required parameters
         redis_data = None
@@ -364,7 +378,10 @@ async def enhance_extraction(
                 cluster=cluster,
                 customer=customer,
                 material_type=material_type,
-                supplier_name=supplier_name
+                supplier_name=supplier_name,
+                short_code=short_code,
+                fabric_content_code_description=fabric_content_code_description,
+                material_group=material_group
             )
             print(f"Redis lookup successful: found {len(redis_data.get('customers', []))} customers, {len(redis_data.get('suppliers', []))} suppliers, {len(redis_data.get('material_security_groups', []))} security groups, {len(redis_data.get('material_groups', []))} material groups, {len(redis_data.get('composition', []))} compositions, {len(redis_data.get('fabric_contents', []))} fabric contents" if redis_data else "Redis lookup returned no data")
         else:
@@ -418,9 +435,9 @@ async def enhance_extraction(
                 "enhancement_stats": {"original": 0, "enhanced": 0},
                 "total_fields": 0
             }
-        
-        return EnhanceExtractionResponse(
-            extraction_id=extraction_id,
+    
+    return EnhanceExtractionResponse(
+        extraction_id=extraction_id,
             message=message,
             data=request.data,  # ✅ Original target data from request
             redis_data=redis_data,  # ✅ Related Redis data (customers, suppliers, material_security_groups)
@@ -507,7 +524,7 @@ async def list_extractions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list extractions: {str(e)}"
-        )
+    )
 
 
 @router.websocket("/extractions/ws")
