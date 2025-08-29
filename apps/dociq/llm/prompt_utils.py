@@ -263,8 +263,7 @@ def parse_llm_enhancement_response(raw_response: str) -> dict:
             # Count enhancements
             enhancement_stats = {
                 "original": 0,
-                "redis_enhanced": 0,
-                "redis_verified": 0
+                "enhanced": 0
             }
             
             for mapping in enhanced_mappings:

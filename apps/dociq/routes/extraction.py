@@ -366,7 +366,7 @@ async def enhance_extraction(
                 material_type=material_type,
                 supplier_name=supplier_name
             )
-            print(f"Redis lookup successful: found {len(redis_data.get('customers', []))} customers, {len(redis_data.get('suppliers', []))} suppliers, {len(redis_data.get('material_security_groups', []))} security groups" if redis_data else "Redis lookup returned no data")
+            print(f"Redis lookup successful: found {len(redis_data.get('customers', []))} customers, {len(redis_data.get('suppliers', []))} suppliers, {len(redis_data.get('material_security_groups', []))} security groups, {len(redis_data.get('material_groups', []))} material groups, {len(redis_data.get('composition', []))} compositions, {len(redis_data.get('fabric_contents', []))} fabric contents" if redis_data else "Redis lookup returned no data")
         else:
             print(f"Missing required parameters for Redis lookup: cluster={cluster}, customer={customer}, material_type={material_type}")
         
@@ -376,7 +376,10 @@ async def enhance_extraction(
             total_customers = len(redis_data.get("customers", []))
             total_suppliers = len(redis_data.get("suppliers", []))
             total_msg = len(redis_data.get("material_security_groups", []))
-            message += f" with {total_customers} customers, {total_suppliers} suppliers, {total_msg} material security groups"
+            total_mg = len(redis_data.get("material_groups", []))
+            total_comp = len(redis_data.get("composition", []))
+            total_fc = len(redis_data.get("fabric_contents", []))
+            message += f" with {total_customers} customers, {total_suppliers} suppliers, {total_msg} material security groups, {total_mg} material groups, {total_comp} compositions, {total_fc} fabric contents"
         else:
             message += " (no Redis data available)"
         
@@ -402,8 +405,7 @@ async def enhance_extraction(
                 print(f"LLM enhancement completed successfully:")
                 print(f"  - Total fields: {llm_enhancement_response.get('total_fields', 0)}")
                 print(f"  - Original: {stats.get('original', 0)}")
-                print(f"  - Redis enhanced: {stats.get('redis_enhanced', 0)}")
-                print(f"  - Redis verified: {stats.get('redis_verified', 0)}")
+                print(f"  - Enhanced: {stats.get('enhanced', 0)}")
             else:
                 print(f"LLM enhancement had issues: {llm_enhancement_response.get('status')}")
                 
@@ -413,7 +415,7 @@ async def enhance_extraction(
                 "status": "error",
                 "error": str(e),
                 "enhanced_mappings": [],
-                "enhancement_stats": {"original": 0, "redis_enhanced": 0, "redis_verified": 0},
+                "enhancement_stats": {"original": 0, "enhanced": 0},
                 "total_fields": 0
             }
         

@@ -20,15 +20,17 @@ INSTRUCTIONS:
    - If Redis confirms the existing value is correct, mark it as verified
    - If no matching data is found in Redis, keep the original value
 3. Apply these enhancement rules:
-   - For "Supplier" fields: prioritize data from suppliers table
-   - For "Customer" fields: prioritize data from customers table  
+   - For "Supplier" fields: prioritize data from suppliers table and use the vendor_code as the supplier value
+   - For "Customer" fields: prioritize data from customers table and use the id as the customer value
    - For "Currency" fields: use currency from suppliers table if available
    - For "Material Type" fields: use data from material_security_groups table
    - For "Cluster" fields: use cluster values from any Redis table
+   - For "Width UOM" and "Order Unit" fields: if the value is "inches", use the notation " (double quote) to represent inch
+   - For "UOM" fields: use full names - if "Yd" or "Yds" is present, use "Yards" instead
+   - For "Material Master Grid" fields: if the value is "can't specify", use "No Grid" instead
 4. Assign confidence levels:
    - "original": Value unchanged from input
-   - "redis_enhanced": Value improved using Redis data
-   - "redis_verified": Value confirmed accurate by Redis data
+   - "enhanced": Value improved using Redis data or business rules
 {% else %}
 1. Since no Redis data is available, return all target mappings with "original" confidence
 2. Keep all values unchanged from the input
@@ -36,8 +38,8 @@ INSTRUCTIONS:
 
 Return ONLY the JSON array, no additional text. Example format:
 [
-    {"target_field": "Supplier", "target_value": "Enhanced Company Name", "target_confidence": "redis_enhanced"},
-    {"target_field": "Customer", "target_value": "Verified Customer", "target_confidence": "redis_verified"},
+    {"target_field": "Supplier", "target_value": "Enhanced Company Name", "target_confidence": "enhanced"},
+    {"target_field": "Customer", "target_value": "Enhanced Customer", "target_confidence": "enhanced"},
     {"target_field": "Material Type", "target_value": "Original Value", "target_confidence": "original"}
 ]
 
