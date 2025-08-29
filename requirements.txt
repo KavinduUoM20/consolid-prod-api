@@ -1,14 +1,14 @@
 fastapi[standard]
 uvicorn[standard]
-sqlmodel 
+sqlmodel
 sqlalchemy[asyncio]
-asyncpg 
+asyncpg
 pydantic
 python-dotenv
 mistralai
 pytest
-python-dotenv
 datauri
 openai
 Jinja2
 pydantic_settings
+redis

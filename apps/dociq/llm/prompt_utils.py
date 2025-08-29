@@ -32,6 +32,24 @@ def get_content_mapper_template() -> str:
     return template_content
 
 
+def get_content_enhancer_template() -> str:
+    """
+    Read the content enhancer Jinja template from prompts/content_enhancer.j2
+    
+    Returns:
+        The template content as a string
+    """
+    # Get the path to the prompts directory
+    prompts_dir = Path(__file__).parent.parent / "prompts"
+    template_path = prompts_dir / "content_enhancer.j2"
+    
+    # Read the template file
+    with open(template_path, 'r', encoding='utf-8') as f:
+        template_content = f.read()
+    
+    return template_content
+
+
 async def get_document_content(session: AsyncSession, document_id: UUID) -> str:
     """
     Get document details and return the content of the file stored in doc_path
@@ -63,21 +81,8 @@ async def get_document_content(session: AsyncSession, document_id: UUID) -> str:
                 with open(md_file_path, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
                 
-                # Check if the content is a path to another file
-                if content.startswith('outputs\\') or content.startswith('outputs/'):
-                    # This is a reference to another file, read that file instead
-                    referenced_file = Path(content)
-                    
-                    if referenced_file.exists():
-                        with open(referenced_file, 'r', encoding='utf-8') as f:
-                            actual_content = f.read()
-                        return actual_content
-                    else:
-                        return content  # Return the path if referenced file doesn't exist
-                else:
-                    # This is actual content
-                    if content:
-                        return content
+                if content:
+                    return content
             except Exception as e:
                 print(f"Error reading markdown content from {md_file_path}: {e}")
         else:
@@ -177,6 +182,117 @@ async def process_content_mapping(document_id: UUID, template_id: UUID, session:
     target_mapping = await parse_llm_response(response_data)
     
     return target_mapping
+
+
+async def process_content_enhancement(target_mappings: List[dict], redis_data: dict = None):
+    """
+    Process content enhancement with target mappings and Redis data
+    
+    Args:
+        target_mappings: List of target mapping dictionaries
+        redis_data: Dictionary containing Redis table results
+        
+    Returns:
+        LLM enhancement response
+    """
+    # Get the Jinja template
+    template_content = get_content_enhancer_template()
+    
+    # Set up Jinja environment and render template
+    jinja_env = Environment(autoescape=False)
+    template = jinja_env.from_string(template_content)
+    
+    # Prepare data for template rendering
+    template_data = {
+        "target_mappings": target_mappings,
+        "redis_data": redis_data or {},
+        "has_redis_data": redis_data is not None
+    }
+    
+    # Render template with the data
+    rendered_prompt = template.render(**template_data)
+    
+    # Log the rendered prompt for debugging
+    print("=== LLM Enhancement Prompt ===")
+    print(rendered_prompt[:500] + "..." if len(rendered_prompt) > 500 else rendered_prompt)
+    print("=== End Prompt ===")
+    
+    # Call LLM using llm_connections.py
+    response = ask_llm(rendered_prompt)
+    
+    print(f"=== LLM Raw Response ===")
+    print(response[:300] + "..." if len(response) > 300 else response)
+    print("=== End Raw Response ===")
+    
+    # Parse and clean the response
+    cleaned_response = parse_llm_enhancement_response(response)
+    
+    return cleaned_response
+
+
+def parse_llm_enhancement_response(raw_response: str) -> dict:
+    """
+    Parse and clean the LLM enhancement response to extract structured JSON
+    
+    Args:
+        raw_response: Raw response from LLM which may contain markdown code blocks
+        
+    Returns:
+        dict: Structured response with parsed JSON and metadata
+    """
+    try:
+        # Remove markdown code blocks if present
+        cleaned_response = raw_response.strip()
+        
+        # Check if response is wrapped in markdown code blocks
+        if cleaned_response.startswith('```json') and cleaned_response.endswith('```'):
+            # Extract JSON from markdown code block
+            cleaned_response = cleaned_response[7:-3].strip()  # Remove ```json and ```
+        elif cleaned_response.startswith('```') and cleaned_response.endswith('```'):
+            # Extract content from generic code block
+            cleaned_response = cleaned_response[3:-3].strip()  # Remove ``` and ```
+        
+        # Try to parse as JSON
+        try:
+            enhanced_mappings = json.loads(cleaned_response)
+            
+            # Validate that it's a list of mappings
+            if not isinstance(enhanced_mappings, list):
+                raise ValueError("Enhanced mappings must be a JSON array")
+            
+            # Count enhancements
+            enhancement_stats = {
+                "original": 0,
+                "enhanced": 0
+            }
+            
+            for mapping in enhanced_mappings:
+                confidence = mapping.get("target_confidence", "original")
+                if confidence in enhancement_stats:
+                    enhancement_stats[confidence] += 1
+            
+            return {
+                "status": "success",
+                "enhanced_mappings": enhanced_mappings,
+                "enhancement_stats": enhancement_stats,
+                "total_fields": len(enhanced_mappings)
+            }
+            
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse LLM response as JSON: {e}")
+            return {
+                "status": "parse_error",
+                "error": f"JSON parsing failed: {str(e)}",
+                "raw_response": raw_response[:200] + "..." if len(raw_response) > 200 else raw_response
+            }
+    
+    except Exception as e:
+        print(f"Error processing LLM enhancement response: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "raw_response": raw_response[:200] + "..." if len(raw_response) > 200 else raw_response
+        }
 
 
 async def parse_llm_response(response_data: dict) -> TargetMapping:

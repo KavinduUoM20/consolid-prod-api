@@ -1,7 +1,7 @@
 from typing import Optional, List, Literal
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class FieldMappingSchema(BaseModel):
@@ -11,9 +11,7 @@ class FieldMappingSchema(BaseModel):
     description: Optional[str] = None
     required: bool = True
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TemplateBase(BaseModel):
@@ -28,9 +26,7 @@ class TemplateBase(BaseModel):
     header_row: Optional[int] = None
     sheetname: Optional[str] = None
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TemplateCreate(TemplateBase):
@@ -47,9 +43,7 @@ class TemplateUpdate(BaseModel):
     header_row: Optional[int] = None
     sheetname: Optional[str] = None
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TemplateRead(TemplateBase):
@@ -58,6 +52,9 @@ class TemplateRead(TemplateBase):
     updated_at: datetime
     fields: int  # Calculated field
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat()
+        }
+    )

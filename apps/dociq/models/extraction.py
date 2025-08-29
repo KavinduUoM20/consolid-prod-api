@@ -38,6 +38,20 @@ class Extraction(SQLModel, table=True):
         sa_column=Column(pg.VARCHAR(50), nullable=True)
     )
 
+    # Cluster, customer, and material type information
+    cluster: Optional[str] = Field(
+        default=None,
+        sa_column=Column(pg.VARCHAR(100), nullable=True)
+    )
+    customer: Optional[str] = Field(
+        default=None,
+        sa_column=Column(pg.VARCHAR(100), nullable=True)
+    )
+    material_type: Optional[str] = Field(
+        default=None,
+        sa_column=Column(pg.VARCHAR(100), nullable=True)
+    )
+
     # Timestamps
     created_at: datetime = Field(
         sa_column=Column(pg.TIMESTAMP(timezone=True), nullable=False, default=datetime.utcnow)

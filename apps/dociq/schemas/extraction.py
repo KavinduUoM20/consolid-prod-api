@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ExtractionRead(BaseModel):
@@ -12,12 +12,17 @@ class ExtractionRead(BaseModel):
     target_mapping_id: Optional[UUID] = None
     current_step: Optional[str] = None
     status: Optional[str] = None
+    cluster: Optional[str] = None
+    customer: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat()
+        }
+    )
 
 
 class ExtractionUpdate(BaseModel):
@@ -26,10 +31,10 @@ class ExtractionUpdate(BaseModel):
     target_mapping_id: Optional[UUID] = None
     current_step: Optional[str] = None
     status: Optional[str] = None
+    cluster: Optional[str] = None
+    customer: Optional[str] = None
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ExtractionCreate(BaseModel):
@@ -39,7 +44,7 @@ class ExtractionCreate(BaseModel):
     target_mapping_id: Optional[UUID] = None
     current_step: Optional[str] = None
     status: Optional[str] = None
+    cluster: Optional[str] = None
+    customer: Optional[str] = None
 
-    model_config = {
-        "from_attributes": True
-    } 
+    model_config = ConfigDict(from_attributes=True) 

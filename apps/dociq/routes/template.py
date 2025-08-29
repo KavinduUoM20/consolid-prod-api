@@ -1,6 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.dociq.db import get_dociq_session
@@ -56,6 +56,8 @@ async def create_template(
 
 @router.get("/templates", response_model=List[TemplateRead])
 async def get_templates(
+    request: Request,
+    response: Response,
     skip: int = 0,
     limit: int = 100,
     category: Optional[str] = None,
@@ -76,6 +78,15 @@ async def get_templates(
         category=category, 
         template_type=template_type
     )
+    
+    # Add security headers to prevent mixed content
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "upgrade-insecure-requests"
+    
+    # Let FastAPI handle the serialization automatically
     return templates
 
 
