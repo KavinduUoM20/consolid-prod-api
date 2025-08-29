@@ -83,7 +83,7 @@ class ExtractionService:
 
     async def _query_database_tables(self, cluster: str, customer: str, material_type: str):
         """
-        Concurrently query the database tables: customers, supplier, material_security_group
+        Concurrently query the database tables: customers, supplier, material_security_group, material_groups, composition, fabric_contents
         
         Args:
             cluster: Cluster identifier
@@ -96,7 +96,7 @@ class ExtractionService:
                 # First, let's check if the tables exist and have any data at all
                 try:
                     # Check if tables exist and have data
-                    tables_check = await session.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('customers', 'supplier', 'material_security_group')"))
+                    tables_check = await session.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('customers', 'supplier', 'material_security_group', 'material_groups', 'composition', 'fabric_contents')"))
                     existing_tables = [row[0] for row in tables_check.fetchall()]
                     print(f"Existing tables: {existing_tables}")
                     
@@ -128,23 +128,44 @@ class ExtractionService:
                       AND material_type ILIKE '%' || :material_type || '%'
                 """)
                 
-                # Execute all three queries concurrently
+                # Add the three new table queries
+                material_groups_query = text("""
+                    SELECT * FROM material_groups
+                """)
+                composition_query = text("""
+                    SELECT * FROM composition
+                """)
+                fabric_contents_query = text("""
+                    SELECT * FROM fabric_contents
+                """)
+                
+                # Execute all six queries concurrently
                 print(f"Starting concurrent queries to database with material_type: {material_type}...")
                 print(f"Query parameters - cluster: '{cluster}', customer: '{customer}', material_type: '{material_type}'")
                 print("Executing queries with partial matching:")
                 print(f"  - customers: WHERE cluster ILIKE '%{cluster}%' AND customer ILIKE '%{customer}%'")
                 print(f"  - supplier: WHERE cluster ILIKE '%{cluster}%'")
                 print(f"  - material_security_group: WHERE cluster ILIKE '%{cluster}%' AND customer ILIKE '%{customer}%' AND material_type ILIKE '%{material_type}%'")
+                print("Executing queries for reference tables:")
+                print(f"  - material_groups: SELECT * FROM material_groups")
+                print(f"  - composition: SELECT * FROM composition") 
+                print(f"  - fabric_contents: SELECT * FROM fabric_contents")
                 
                 customers_task = session.execute(customers_query, {"cluster": cluster, "customer": customer})
                 supplier_task = session.execute(supplier_query, {"cluster": cluster})
                 material_security_group_task = session.execute(material_security_group_query, {"cluster": cluster, "customer": customer, "material_type": material_type})
+                material_groups_task = session.execute(material_groups_query)
+                composition_task = session.execute(composition_query)
+                fabric_contents_task = session.execute(fabric_contents_query)
                 
                 # Wait for all queries to complete
-                customers_result, supplier_result, material_security_group_result = await asyncio.gather(
+                customers_result, supplier_result, material_security_group_result, material_groups_result, composition_result, fabric_contents_result = await asyncio.gather(
                     customers_task,
                     supplier_task,
                     material_security_group_task,
+                    material_groups_task,
+                    composition_task,
+                    fabric_contents_task,
                     return_exceptions=True
                 )
                 
@@ -190,10 +211,50 @@ class ExtractionService:
                     if len(material_security_group_rows) > 3:
                         print(f"  ... and {len(material_security_group_rows) - 3} more rows")
                 
+                # Process material_groups result
+                if isinstance(material_groups_result, Exception):
+                    print(f"Material groups query failed: {material_groups_result}")
+                    material_groups_rows = []
+                else:
+                    material_groups_rows = material_groups_result.fetchall()
+                    print(f"Material groups table: {len(material_groups_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(material_groups_rows[:3]):  # Show first 3 rows
+                        print(f"  Material group {i+1}: {dict(row._mapping)}")
+                    if len(material_groups_rows) > 3:
+                        print(f"  ... and {len(material_groups_rows) - 3} more rows")
+                
+                # Process composition result
+                if isinstance(composition_result, Exception):
+                    print(f"Composition query failed: {composition_result}")
+                    composition_rows = []
+                else:
+                    composition_rows = composition_result.fetchall()
+                    print(f"Composition table: {len(composition_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(composition_rows[:3]):  # Show first 3 rows
+                        print(f"  Composition {i+1}: {dict(row._mapping)}")
+                    if len(composition_rows) > 3:
+                        print(f"  ... and {len(composition_rows) - 3} more rows")
+                
+                # Process fabric_contents result
+                if isinstance(fabric_contents_result, Exception):
+                    print(f"Fabric contents query failed: {fabric_contents_result}")
+                    fabric_contents_rows = []
+                else:
+                    fabric_contents_rows = fabric_contents_result.fetchall()
+                    print(f"Fabric contents table: {len(fabric_contents_rows)} rows retrieved")
+                    # Optionally print first few rows for debugging
+                    for i, row in enumerate(fabric_contents_rows[:3]):  # Show first 3 rows
+                        print(f"  Fabric content {i+1}: {dict(row._mapping)}")
+                    if len(fabric_contents_rows) > 3:
+                        print(f"  ... and {len(fabric_contents_rows) - 3} more rows")
+                
                 # Store results in Redis as hashmaps
                 await self._store_table_results_in_redis(
                     cluster, customer, material_type,
-                    customers_rows, supplier_rows, material_security_group_rows
+                    customers_rows, supplier_rows, material_security_group_rows,
+                    material_groups_rows, composition_rows, fabric_contents_rows
                 )
                 
                 # print("=== End Database Query Results ===")
@@ -209,7 +270,10 @@ class ExtractionService:
         material_type: str,
         customers_rows: List,
         supplier_rows: List, 
-        material_security_group_rows: List
+        material_security_group_rows: List,
+        material_groups_rows: List,
+        composition_rows: List,
+        fabric_contents_rows: List
     ):
         """
         Store database table results in Redis as hashmaps for easy retrieval
@@ -221,6 +285,9 @@ class ExtractionService:
             customers_rows: Results from customers table
             supplier_rows: Results from supplier table
             material_security_group_rows: Results from material_security_group table
+            material_groups_rows: Results from material_groups table
+            composition_rows: Results from composition table
+            fabric_contents_rows: Results from fabric_contents table
         """
         if not REDIS_AVAILABLE or not REDIS_CLIENT:
             return
@@ -332,18 +399,126 @@ class ExtractionService:
                 # Set expiration (24 hours)
                 REDIS_CLIENT.expire(msg_hash_key, 86400)
             
+            # Store material_groups table results
+            material_groups_hash_key = f"{key_prefix}:material_groups"
+            if material_groups_rows:
+                # Convert rows to clean JSON array
+                rows_data = []
+                for row in material_groups_rows:
+                    row_data = dict(row._mapping)
+                    # Convert non-serializable types to strings
+                    clean_row = {}
+                    for k, v in row_data.items():
+                        if v is None:
+                            clean_row[k] = None
+                        elif isinstance(v, (str, int, float, bool)):
+                            clean_row[k] = v
+                        else:
+                            clean_row[k] = str(v)
+                    rows_data.append(clean_row)
+                
+                # Store as clean JSON
+                REDIS_CLIENT.hset(material_groups_hash_key, "data", json.dumps(rows_data))
+                REDIS_CLIENT.hset(material_groups_hash_key, "metadata", json.dumps({
+                    "table_name": "material_groups",
+                    "row_count": len(material_groups_rows),
+                    "query_timestamp": timestamp,
+                    "query_params": {
+                        "cluster": cluster,
+                        "customer": customer,
+                        "material_type": material_type
+                    }
+                }))
+                
+                # Set expiration (24 hours)
+                REDIS_CLIENT.expire(material_groups_hash_key, 86400)
+            
+            # Store composition table results
+            composition_hash_key = f"{key_prefix}:composition"
+            if composition_rows:
+                # Convert rows to clean JSON array
+                rows_data = []
+                for row in composition_rows:
+                    row_data = dict(row._mapping)
+                    # Convert non-serializable types to strings
+                    clean_row = {}
+                    for k, v in row_data.items():
+                        if v is None:
+                            clean_row[k] = None
+                        elif isinstance(v, (str, int, float, bool)):
+                            clean_row[k] = v
+                        else:
+                            clean_row[k] = str(v)
+                    rows_data.append(clean_row)
+                
+                # Store as clean JSON
+                REDIS_CLIENT.hset(composition_hash_key, "data", json.dumps(rows_data))
+                REDIS_CLIENT.hset(composition_hash_key, "metadata", json.dumps({
+                    "table_name": "composition",
+                    "row_count": len(composition_rows),
+                    "query_timestamp": timestamp,
+                    "query_params": {
+                        "cluster": cluster,
+                        "customer": customer,
+                        "material_type": material_type
+                    }
+                }))
+                
+                # Set expiration (24 hours)
+                REDIS_CLIENT.expire(composition_hash_key, 86400)
+            
+            # Store fabric_contents table results
+            fabric_contents_hash_key = f"{key_prefix}:fabric_contents"
+            if fabric_contents_rows:
+                # Convert rows to clean JSON array
+                rows_data = []
+                for row in fabric_contents_rows:
+                    row_data = dict(row._mapping)
+                    # Convert non-serializable types to strings
+                    clean_row = {}
+                    for k, v in row_data.items():
+                        if v is None:
+                            clean_row[k] = None
+                        elif isinstance(v, (str, int, float, bool)):
+                            clean_row[k] = v
+                        else:
+                            clean_row[k] = str(v)
+                    rows_data.append(clean_row)
+                
+                # Store as clean JSON
+                REDIS_CLIENT.hset(fabric_contents_hash_key, "data", json.dumps(rows_data))
+                REDIS_CLIENT.hset(fabric_contents_hash_key, "metadata", json.dumps({
+                    "table_name": "fabric_contents",
+                    "row_count": len(fabric_contents_rows),
+                    "query_timestamp": timestamp,
+                    "query_params": {
+                        "cluster": cluster,
+                        "customer": customer,
+                        "material_type": material_type
+                    }
+                }))
+                
+                # Set expiration (24 hours)
+                REDIS_CLIENT.expire(fabric_contents_hash_key, 86400)
+            
             # Store a master key that lists all the table keys for this query
             master_key = f"{key_prefix}:master"
             table_keys = {
                 "customers": customers_hash_key if customers_rows else None,
                 "supplier": supplier_hash_key if supplier_rows else None, 
-                "material_security_group": msg_hash_key if material_security_group_rows else None
+                "material_security_group": msg_hash_key if material_security_group_rows else None,
+                "material_groups": material_groups_hash_key if material_groups_rows else None,
+                "composition": composition_hash_key if composition_rows else None,
+                "fabric_contents": fabric_contents_hash_key if fabric_contents_rows else None
             }
             
             print(f"Redis storage summary:")
             print(f"  - customers_rows: {len(customers_rows)} -> hash_key: {customers_hash_key if customers_rows else 'None'}")
             print(f"  - supplier_rows: {len(supplier_rows)} -> hash_key: {supplier_hash_key if supplier_rows else 'None'}")
             print(f"  - material_security_group_rows: {len(material_security_group_rows)} -> hash_key: {msg_hash_key if material_security_group_rows else 'None'}")
+            print(f"  - material_groups_rows: {len(material_groups_rows)} -> hash_key: {material_groups_hash_key if material_groups_rows else 'None'}")
+            print(f"  - composition_rows: {len(composition_rows)} -> hash_key: {composition_hash_key if composition_rows else 'None'}")
+            print(f"  - fabric_contents_rows: {len(fabric_contents_rows)} -> hash_key: {fabric_contents_hash_key if fabric_contents_rows else 'None'}")
             
             # Remove None values
             table_keys = {k: v for k, v in table_keys.items() if v is not None}
@@ -449,7 +624,7 @@ class ExtractionService:
 
     def get_all_table_results_from_redis(self, cluster: str, customer: str, material_type: str, timestamp: str = None, supplier_name: str = None):
         """
-        Retrieve all database table results (customers, suppliers, material_security_groups) from Redis
+        Retrieve all database table results (customers, suppliers, material_security_groups, material_groups, composition, fabric_contents) from Redis
         
         Args:
             cluster: Cluster identifier
@@ -459,7 +634,7 @@ class ExtractionService:
             supplier_name: Optional supplier name to filter suppliers data
             
         Returns:
-            dict: Dictionary containing all table results with keys 'customers', 'suppliers', 'material_security_groups'
+            dict: Dictionary containing all table results with keys 'customers', 'suppliers', 'material_security_groups', 'material_groups', 'composition', 'fabric_contents'
                   Returns None if no data found
         """
         if not REDIS_AVAILABLE or not REDIS_CLIENT:
@@ -477,7 +652,10 @@ class ExtractionService:
                 "query_info": redis_results.get("query_info", {}),
                 "customers": [],
                 "suppliers": [],
-                "material_security_groups": []
+                "material_security_groups": [],
+                "material_groups": [],
+                "composition": [],
+                "fabric_contents": []
             }
             
             # Extract customers data
@@ -491,6 +669,18 @@ class ExtractionService:
             # Extract material_security_group data (return as "material_security_groups")
             if "material_security_group" in redis_results["tables"]:
                 all_results["material_security_groups"] = redis_results["tables"]["material_security_group"]["rows"]
+            
+            # Extract material_groups data
+            if "material_groups" in redis_results["tables"]:
+                all_results["material_groups"] = redis_results["tables"]["material_groups"]["rows"]
+            
+            # Extract composition data
+            if "composition" in redis_results["tables"]:
+                all_results["composition"] = redis_results["tables"]["composition"]["rows"]
+            
+            # Extract fabric_contents data
+            if "fabric_contents" in redis_results["tables"]:
+                all_results["fabric_contents"] = redis_results["tables"]["fabric_contents"]["rows"]
             
             return all_results
             
