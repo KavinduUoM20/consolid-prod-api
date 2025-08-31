@@ -846,6 +846,9 @@ class ExtractionService:
             
             # Extract material_groups data
             if "material_groups" in redis_results["tables"]:
+                # Keep the data in its original format - can be either:
+                # - Array of strings when filtered: ["SJ", "Interlock", "Single Jersey"]
+                # - Array of objects when unfiltered: [{"material_sub_group": "SJ", "material_group": "Weft Knit"}, ...]
                 all_results["material_groups"] = redis_results["tables"]["material_groups"]["rows"]
             
             # Extract composition data (legacy support)
