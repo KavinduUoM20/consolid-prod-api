@@ -51,6 +51,69 @@ class ExtractionService:
     def __init__(self, session: AsyncSession):
         self.session = session
     
+    def _calculate_similarity(self, text1: str, text2: str) -> float:
+        """
+        Calculate semantic similarity between two strings using multiple approaches
+        
+        Args:
+            text1: First string to compare
+            text2: Second string to compare
+            
+        Returns:
+            float: Similarity score between 0.0 and 1.0
+        """
+        if not text1 or not text2:
+            return 0.0
+        
+        # Normalize strings
+        text1 = text1.lower().strip()
+        text2 = text2.lower().strip()
+        
+        if text1 == text2:
+            return 1.0
+        
+        # Check for substring matches (partial matching)
+        if text1 in text2 or text2 in text1:
+            return 0.8
+        
+        # Calculate word overlap similarity
+        words1 = set(text1.split())
+        words2 = set(text2.split())
+        
+        if not words1 or not words2:
+            return 0.0
+        
+        # Jaccard similarity (intersection over union)
+        intersection = len(words1.intersection(words2))
+        union = len(words1.union(words2))
+        
+        if union == 0:
+            return 0.0
+        
+        jaccard_similarity = intersection / union
+        
+        # Simple character-based similarity as fallback
+        # Calculate longest common subsequence ratio
+        def lcs_length(s1, s2):
+            m, n = len(s1), len(s2)
+            dp = [[0] * (n + 1) for _ in range(m + 1)]
+            
+            for i in range(1, m + 1):
+                for j in range(1, n + 1):
+                    if s1[i-1] == s2[j-1]:
+                        dp[i][j] = dp[i-1][j-1] + 1
+                    else:
+                        dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+            
+            return dp[m][n]
+        
+        lcs_len = lcs_length(text1, text2)
+        max_len = max(len(text1), len(text2))
+        char_similarity = lcs_len / max_len if max_len > 0 else 0.0
+        
+        # Return the maximum of word-based and character-based similarity
+        return max(jaccard_similarity, char_similarity)
+    
     async def process_cluster_customer_headers(self, cluster: str, customer: str, material_type: str, extraction_id: str, document_id: str):
         """
         Background task to process X-Cluster, X-Customer, and X-Material-Type headers
@@ -607,40 +670,93 @@ class ExtractionService:
                                         break
                             rows = filtered_rows
                         
-                        # Filter material_groups data by short_code or material_group if provided
-                        elif table_name == "material_groups" and (short_code or material_group):
-                            filtered_rows = []
+                        # Filter material_groups data by material_group if provided
+                        elif table_name == "material_groups" and material_group:
+                            filtered_sub_groups = []
                             for row in rows:
-                                should_include = False
-                                
-                                # Filter by short_code if provided
-                                if short_code:
-                                    for field_value in row.values():
-                                        if isinstance(field_value, str) and short_code.lower() in field_value.lower():
-                                            should_include = True
-                                            break
-                                
-                                # Filter by material_group if provided and not already included
-                                if not should_include and material_group:
-                                    for field_value in row.values():
-                                        if isinstance(field_value, str) and material_group.lower() in field_value.lower():
-                                            should_include = True
-                                            break
-                                
-                                if should_include:
-                                    filtered_rows.append(row)
-                            rows = filtered_rows
+                                # Check if the row has a material_group field that semantically matches
+                                row_material_group = row.get('material_group', '')
+                                if isinstance(row_material_group, str) and row_material_group:
+                                    # Use semantic similarity matching (fuzzy matching)
+                                    similarity_score = self._calculate_similarity(material_group.lower(), row_material_group.lower())
+                                    if similarity_score > 0.6:  # 60% similarity threshold
+                                        # Extract material_sub_group if it exists
+                                        material_sub_group = row.get('material_sub_group', '')
+                                        if material_sub_group:
+                                            filtered_sub_groups.append(material_sub_group)
+                            
+                            # Remove duplicates and return as array
+                            unique_sub_groups = list(set(filtered_sub_groups))
+                            # Replace rows with the filtered sub groups array
+                            rows = unique_sub_groups
                         
-                        # Filter composition data by fabric_content_code_description if provided
-                        elif table_name == "composition" and fabric_content_code_description:
-                            filtered_rows = []
+                        # Filter fabric_contents data by fabric_content_code_description if provided
+                        elif table_name == "fabric_contents" and fabric_content_code_description:
+                            filtered_fabric_records = []
+                            similarity_scores = []
+                            
                             for row in rows:
-                                # Check if any field contains the fabric_content_code_description (case insensitive)
-                                for field_value in row.values():
-                                    if isinstance(field_value, str) and fabric_content_code_description.lower() in field_value.lower():
-                                        filtered_rows.append(row)
-                                        break
-                            rows = filtered_rows
+                                # Check if the row has fabric_content_code_description field
+                                row_fabric_description = row.get('fabric_content_code_description', '')
+                                if isinstance(row_fabric_description, str) and row_fabric_description:
+                                    # Use semantic similarity matching
+                                    similarity_score = self._calculate_similarity(fabric_content_code_description.lower(), row_fabric_description.lower())
+                                    if similarity_score > 0.5:  # 50% similarity threshold for fabric contents
+                                        # Store record with similarity score for sorting
+                                        record = {
+                                            'fabric_content_code': row.get('fabric_content_code', ''),
+                                            'fabric_content_code_description': row_fabric_description,
+                                            'similarity_score': similarity_score
+                                        }
+                                        filtered_fabric_records.append(record)
+                                        similarity_scores.append(similarity_score)
+                            
+                            # Sort by similarity score (highest first) and limit to top matches
+                            filtered_fabric_records.sort(key=lambda x: x['similarity_score'], reverse=True)
+                            
+                            # Remove similarity_score from final results and limit to top 1 match
+                            final_records = []
+                            for record in filtered_fabric_records[:1]:  # Top 1 most similar match
+                                final_records.append({
+                                    'fabric_content_code': record['fabric_content_code'],
+                                    'fabric_content_code_description': record['fabric_content_code_description']
+                                })
+                            
+                            rows = final_records
+                        
+                        # Filter composition data by short_code if provided
+                        elif table_name == "composition" and short_code:
+                            filtered_composition_records = []
+                            similarity_scores = []
+                            
+                            for row in rows:
+                                # Check if the row has short_code field
+                                row_short_code = row.get('short_code', '')
+                                if isinstance(row_short_code, str) and row_short_code:
+                                    # Use semantic similarity matching
+                                    similarity_score = self._calculate_similarity(short_code.lower(), row_short_code.lower())
+                                    if similarity_score > 0.5:  # 50% similarity threshold for composition
+                                        # Store record with similarity score for sorting
+                                        record = {
+                                            'short_code': row_short_code,
+                                            'composition_material': row.get('composition_material', ''),
+                                            'similarity_score': similarity_score
+                                        }
+                                        filtered_composition_records.append(record)
+                                        similarity_scores.append(similarity_score)
+                            
+                            # Sort by similarity score (highest first) and limit to top 1 match
+                            filtered_composition_records.sort(key=lambda x: x['similarity_score'], reverse=True)
+                            
+                            # Remove similarity_score from final results and limit to top 1 match
+                            final_records = []
+                            for record in filtered_composition_records[:1]:  # Top 1 most similar match
+                                final_records.append({
+                                    'short_code': record['short_code'],
+                                    'composition_material': record['composition_material']
+                                })
+                            
+                            rows = final_records
                     
                     if "metadata" in decoded_data:
                         metadata = json.loads(decoded_data["metadata"])
@@ -649,15 +765,23 @@ class ExtractionService:
                         if table_name == "supplier" and supplier_name:
                             metadata["filtered_by_supplier_name"] = supplier_name
                             metadata["filtered_row_count"] = len(rows)
-                        elif table_name == "material_groups" and (short_code or material_group):
-                            if short_code:
-                                metadata["filtered_by_short_code"] = short_code
-                            if material_group:
-                                metadata["filtered_by_material_group"] = material_group
+                        elif table_name == "material_groups" and material_group:
+                            metadata["filtered_by_material_group"] = material_group
                             metadata["filtered_row_count"] = len(rows)
-                        elif table_name == "composition" and fabric_content_code_description:
+                            metadata["data_format"] = "material_sub_group_array"
+                            metadata["similarity_threshold"] = 0.6
+                        elif table_name == "fabric_contents" and fabric_content_code_description:
                             metadata["filtered_by_fabric_content_code_description"] = fabric_content_code_description
                             metadata["filtered_row_count"] = len(rows)
+                            metadata["data_format"] = "fabric_content_records"
+                            metadata["similarity_threshold"] = 0.5
+                            metadata["max_results"] = 1
+                        elif table_name == "composition" and short_code:
+                            metadata["filtered_by_short_code"] = short_code
+                            metadata["filtered_row_count"] = len(rows)
+                            metadata["data_format"] = "composition_records"
+                            metadata["similarity_threshold"] = 0.5
+                            metadata["max_results"] = 1
                     
                     results["tables"][table_name] = {
                         "rows": rows,
@@ -724,7 +848,7 @@ class ExtractionService:
             if "material_groups" in redis_results["tables"]:
                 all_results["material_groups"] = redis_results["tables"]["material_groups"]["rows"]
             
-            # Extract composition data
+            # Extract composition data (legacy support)
             if "composition" in redis_results["tables"]:
                 all_results["composition"] = redis_results["tables"]["composition"]["rows"]
             
