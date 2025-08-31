@@ -24,10 +24,15 @@ INSTRUCTIONS:
    - For "Customer" fields: prioritize data from customers table and use the id as the customer value
    - For "Currency" fields: use currency from suppliers table if available
    - For "Material Type" fields: use data from material_security_groups table
-   - For "Cluster" fields: use cluster values from any Redis table
+   - For "Material Sub Group" fields: use data from composition table and use composition_material as the value
+   - For "Composition" fields: use data from use fabric_content table in Redis and assign fabric_content_code of the fabric_content_code_description
+   - For "Material Group" fields: use data from material_groups table, Keep values comma separated
+   - For "Cluster" fields: use cluster values from customer table in Redis
    - For "Width UOM" and "Order Unit" fields: if the value is "inches", use the notation " (double quote) to represent inch
    - For "UOM" fields: use full names - if "Yd" or "Yds" is present, use "Yards" instead
    - For "Material Master Grid" fields: if the value is "can't specify", use "No Grid" instead
+   - For "Source Type" use "Nominated" if not specified, otherwise it could take values (Nominated, MAS Sourced,or Hybrid)
+
 4. Assign confidence levels:
    - "original": Value unchanged from input
    - "enhanced": Value improved using Redis data or business rules
