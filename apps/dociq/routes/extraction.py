@@ -438,11 +438,11 @@ async def enhance_extraction(
     
     return EnhanceExtractionResponse(
         extraction_id=extraction_id,
-            message=message,
-            data=request.data,  # ✅ Original target data from request
-            redis_data=redis_data,  # ✅ Related Redis data (customers, suppliers, material_security_groups)
-            llm_enhancement=llm_enhancement_response  # ✅ LLM enhancement response
-        )
+        message=message,
+        data=request.data,  # ✅ Original target data from request
+        redis_data=redis_data,  # ✅ Related Redis data (customers, suppliers, material_security_groups)
+        llm_enhancement=llm_enhancement_response  # ✅ LLM enhancement response
+    )
         
     except HTTPException:
         raise
