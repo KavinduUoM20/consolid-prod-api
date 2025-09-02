@@ -672,23 +672,61 @@ class ExtractionService:
                         
                         # Filter material_groups data by material_group if provided
                         elif table_name == "material_groups" and material_group:
-                            filtered_sub_groups = []
+                            # Optimized approach: Group by material_group and collect unique material_sub_groups
+                            material_group_dict = {}
+                            
+                            # First pass: Group all data by material_group (case-insensitive)
                             for row in rows:
-                                # Check if the row has a material_group field that semantically matches
+                                row_material_group = row.get('material_group', '')
+                                material_sub_group = row.get('material_sub_group', '')
+                                
+                                if isinstance(row_material_group, str) and isinstance(material_sub_group, str):
+                                    # Normalize the material_group key
+                                    normalized_group = row_material_group.lower().strip()
+                                    
+                                    if normalized_group not in material_group_dict:
+                                        material_group_dict[normalized_group] = {
+                                            'original_name': row_material_group,
+                                            'sub_groups': set()
+                                        }
+                                    
+                                    if material_sub_group:
+                                        material_group_dict[normalized_group]['sub_groups'].add(material_sub_group)
+                            
+                            # Second pass: Find similar material_groups using semantic matching
+                            filtered_sub_groups = set()
+                            search_term = material_group.lower().strip()
+                            
+                            # Direct match first (most efficient)
+                            if search_term in material_group_dict:
+                                filtered_sub_groups.update(material_group_dict[search_term]['sub_groups'])
+                            else:
+                                # Fuzzy matching for similar groups
+                                similarity_matches = []
+                                for group_key, group_data in material_group_dict.items():
+                                    similarity_score = self._calculate_similarity(search_term, group_key)
+                                    if similarity_score > 0.6:  # 60% similarity threshold
+                                        similarity_matches.append((similarity_score, group_data['sub_groups']))
+                                
+                                # Sort by similarity score (highest first) and collect sub_groups
+                                similarity_matches.sort(key=lambda x: x[0], reverse=True)
+                                for score, sub_groups in similarity_matches:
+                                    filtered_sub_groups.update(sub_groups)
+                            
+                            # Convert to sorted list for consistent output
+                            rows = sorted(list(filtered_sub_groups))
+                        
+                        # Handle material_groups data when no specific material_group filter is provided
+                        elif table_name == "material_groups" and not material_group:
+                            # Return a summary of all unique material_groups for reference
+                            unique_groups = set()
+                            for row in rows:
                                 row_material_group = row.get('material_group', '')
                                 if isinstance(row_material_group, str) and row_material_group:
-                                    # Use semantic similarity matching (fuzzy matching)
-                                    similarity_score = self._calculate_similarity(material_group.lower(), row_material_group.lower())
-                                    if similarity_score > 0.6:  # 60% similarity threshold
-                                        # Extract material_sub_group if it exists
-                                        material_sub_group = row.get('material_sub_group', '')
-                                        if material_sub_group:
-                                            filtered_sub_groups.append(material_sub_group)
+                                    unique_groups.add(row_material_group)
                             
-                            # Remove duplicates and return as array
-                            unique_sub_groups = list(set(filtered_sub_groups))
-                            # Replace rows with the filtered sub groups array
-                            rows = unique_sub_groups
+                            # Return top 20 most common material groups (sorted alphabetically)
+                            rows = sorted(list(unique_groups))[:20]
                         
                         # Filter fabric_contents data by fabric_content_code_description if provided
                         elif table_name == "fabric_contents" and fabric_content_code_description:
@@ -770,6 +808,11 @@ class ExtractionService:
                             metadata["filtered_row_count"] = len(rows)
                             metadata["data_format"] = "material_sub_group_array"
                             metadata["similarity_threshold"] = 0.6
+                            metadata["optimization"] = "grouped_by_material_group_with_fuzzy_matching"
+                        elif table_name == "material_groups" and not material_group:
+                            metadata["filtered_row_count"] = len(rows)
+                            metadata["data_format"] = "unique_material_groups_summary"
+                            metadata["max_results"] = 20
                         elif table_name == "fabric_contents" and fabric_content_code_description:
                             metadata["filtered_by_fabric_content_code_description"] = fabric_content_code_description
                             metadata["filtered_row_count"] = len(rows)
