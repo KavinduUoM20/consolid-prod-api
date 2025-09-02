@@ -12,63 +12,157 @@ No Redis reference data available for enhancement.
 {% endif %}
 
 INSTRUCTIONS:
+
+For each target mapping field in the TARGET MAPPING DATA, follow these steps:
+1. Check if the field exists in the target mappings
+2. Check if there is applicable Redis reference data for that field
+3. Apply the appropriate enhancement rule if both conditions are met
+4. If no rule applies or no data is available, keep the original value
+
 {% if has_redis_data %}
+ENHANCEMENT RULES (apply only if both target field exists AND Redis data is available):
 
-For each target mapping field, check if it can be verified or enhanced using Redis reference tables.
+**Supplier** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Supplier" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "suppliers" array with vendor_code values?
+- Action: IF both true, use the first available vendor_code from suppliers array
+- Confidence: "enhanced"
 
-Apply enhancement rules strictly:
+**Customer** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Customer" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "customers" array with id values?
+- Action: IF both true, use the first available id from customers array
+- Confidence: "enhanced"
 
-Supplier → put vendor_code as the supplier value from suppliers table in REDIS REFERENCE DATA
+**Currency** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Currency" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "suppliers" array with currency values?
+- Action: IF both true, use the first available currency from suppliers array
+- Confidence: "enhanced"
 
-Customer → put id from customers table as the customer value from REDIS REFERENCE DATA
+**Material Type** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Material Type" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "material_security_groups" array with material_type values?
+- Action: IF both true, use the first available material_type from material_security_groups array
+- Confidence: "enhanced"
 
-Currency → use currency from suppliers table if available
+**Material Description** → 
+- Always keep the original material description as it is (no enhancement needed)
+- Confidence: "original"
 
-Material Type → use "material_type" from material_security_groups table
+**Material Sub Group** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Material Sub Group" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "composition" array with composition_material values?
+- Action: IF both true, use the first available composition_material from composition array
+- Confidence: "enhanced"
 
-Material Description → put the material Description as it is.
+**Composition** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Composition" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "fabric_contents" array with fabric_content_code values?
+- Action: IF both true, use the first available fabric_content_code from fabric_contents array
+- Confidence: "enhanced"
 
-Material Sub Group → put the composition_material of the relevent short_code from composition table in REDIS REFERENCE DATA
+**Material Group** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Material Group" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "material_groups" array?
+- Action: IF both true, extract all material group values and format as comma-separated string
+- Confidence: "enhanced"
 
-Composition → put the fabric_content_code of the relevant fabric_content_code_description from the fabric_content table in REDIS REFERENCE DATA
+**Cluster** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Cluster" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "customers" array with cluster values?
+- Action: IF both true, use the first available cluster from customers array
+- Confidence: "enhanced"
 
-Material Group → use material_groups table from REDIS REFERENCE DATA and add them into a list(keep multiple values comma-separated)
+NORMALIZATION RULES (apply to current values regardless of Redis data):
 
-Cluster → use cluster values from customers table from REDIS REFERENCE DATA
+**Width UOM / Order Unit** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Width UOM" or "Order Unit" in target_field?
+- Check: Does current target_value equal "inches"?
+- Action: IF both true, replace target_value with " (double quote character)
+- Confidence: "enhanced"
 
-Width UOM / Order Unit → if value = "inches", replace with " (double quote)
+**UOM** → 
+- Check: Does TARGET MAPPING DATA contain a field with "UOM" in target_field?
+- Check: Does current target_value equal "Yd" or "Yds"?
+- Action: IF true, replace target_value with "Yards"
+- Confidence: "enhanced"
 
-UOM → normalize: "Yd"/"Yds" → "Yards"
+**Material Master Grid** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Material Master Grid" in target_field?
+- Check: Does current target_value equal "can't specify"?
+- Action: IF true, replace target_value with "No Grid"
+- Confidence: "enhanced"
 
-Material Master Grid → if value = "can't specify", replace with "No Grid"
+**Source Type** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Source Type" in target_field?
+- Check: Is current target_value missing, empty, or "can't specify"?
+- Action: IF true, set target_value to "Nominated"
+- Note: Allowed values are (Nominated, MAS Sourced, Hybrid)
+- Confidence: "enhanced"
 
-Source Type → if missing, default to "Nominated"; allowed values: (Nominated, MAS Sourced, Hybrid)
+CONFIDENCE LEVELS:
+- "enhanced" → value was improved or standardized using Redis data or business rule
+- "original" → value kept unchanged (no applicable rule or no Redis data available)
 
-Confidence levels:
+EXAMPLE PROCESSING:
 
-"enhanced" → value improved or standardized using Redis or business rule
+Input TARGET MAPPING DATA:
+[
+  {"target_field": "Supplier", "target_value": "ABC Company"},
+  {"target_field": "UOM", "target_value": "Yds"},
+  {"target_field": "Material Type", "target_value": "Fabric"}
+]
 
-"original" → value kept unchanged
+Input REDIS REFERENCE DATA:
+{
+  "suppliers": [{"vendor_code": "SUP001", "currency": "USD"}],
+  "customers": [{"id": "CUST123", "cluster": "US-East"}]
+}
 
-If no Redis match is found and no rule applies → keep the original value as "original".
+Processing Steps:
+1. "Supplier" field exists in target mappings ✓
+2. "suppliers" data exists in Redis with vendor_code ✓
+3. Apply enhancement rule: replace "ABC Company" with "SUP001"
+4. "UOM" field exists with value "Yds" ✓
+5. Apply normalization rule: replace "Yds" with "Yards"
+6. "Material Type" field exists but no material_security_groups in Redis ✗
+7. Keep original value "Fabric"
+
+Expected Output:
+[
+  {"target_field": "Supplier", "target_value": "SUP001", "target_confidence": "enhanced"},
+  {"target_field": "UOM", "target_value": "Yards", "target_confidence": "enhanced"},
+  {"target_field": "Material Type", "target_value": "Fabric", "target_confidence": "original"}
+]
+
 {% else %}
-
-Redis data not available → keep all values unchanged, mark confidence as "original".
+No Redis data available → keep all values unchanged, mark all confidence levels as "original".
 {% endif %}
 
-OUTPUT FORMAT (strict):
+PROCESSING LOGIC:
+
+1. **Start with the original target mappings** - examine each field in the TARGET MAPPING DATA
+2. **Check Redis data availability** - verify if the required Redis table and field exist
+3. **Apply enhancement rules** - only if both target field exists AND Redis data is available
+4. **Apply normalization rules** - these work on the current value regardless of Redis data
+5. **Set confidence level** - "enhanced" if any rule was applied, "original" if unchanged
+6. **Include ALL original fields** - ensure every field from TARGET MAPPING DATA is in the output
+
+OUTPUT FORMAT (strict JSON array):
 
 [
   {"target_field": "Supplier", "target_value": "Enhanced Company Name", "target_confidence": "enhanced"},
   {"target_field": "Customer", "target_value": "Enhanced Customer", "target_confidence": "enhanced"},
-  {"target_field": "Material Type", "target_value": "Original Value", "target_confidence": "original"}
+  {"target_field": "Material Type", "target_value": "Original Value", "target_confidence": "original"},
+  {"target_field": "UOM", "target_value": "Yards", "target_confidence": "enhanced"}
 ]
 
+CRITICAL REQUIREMENTS:
 
-REQUIREMENTS:
-
-Response must be a valid JSON array only.
-
-Include all target fields from the input mappings.
-
-No extra text, comments, or formatting outside the JSON.
+✓ Response must be a valid JSON array only - no markdown, no extra text
+✓ Include ALL target fields from the TARGET MAPPING DATA input
+✓ Only enhance fields where both conditions are met: field exists + Redis data available
+✓ Apply normalization rules to improve data quality
+✓ Set correct confidence levels based on whether enhancement occurred
+✓ Preserve original values when no enhancement rule applies
