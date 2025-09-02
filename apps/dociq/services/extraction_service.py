@@ -1077,8 +1077,12 @@ class ExtractionService:
         document_id = extraction.document_id
         template_id = extraction.template_id
         
-        # Call function in prompt_utils.py with document_id, template_id, and session
-        target_mapping = await process_content_mapping(document_id, template_id, self.session)
+        # Extract cluster and customer data from extraction object
+        cluster = extraction.cluster
+        customer = extraction.customer
+        
+        # Call function in prompt_utils.py with document_id, template_id, session, cluster, and customer
+        target_mapping = await process_content_mapping(document_id, template_id, self.session, cluster, customer)
         
         # Save the target mapping to the database
         self.session.add(target_mapping)

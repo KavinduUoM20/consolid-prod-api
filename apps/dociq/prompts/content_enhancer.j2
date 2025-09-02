@@ -18,21 +18,23 @@ For each target mapping field, check if it can be verified or enhanced using Red
 
 Apply enhancement rules strictly:
 
-Supplier → use vendor_code from suppliers table
+Supplier → put vendor_code as the supplier value from suppliers table in REDIS REFERENCE DATA
 
-Customer → use id from customers table
+Customer → put id from customers table as the customer value from REDIS REFERENCE DATA
 
 Currency → use currency from suppliers table if available
 
-Material Type → use material_security_groups table
+Material Type → use "material_type" from material_security_groups table
 
-Material Sub Group → use composition table (composition_material)
+Material Description → put the material Description as it is.
 
-Composition → use fabric_content table (fabric_content_code of fabric_content_code_description)
+Material Sub Group → put the composition_material of the relevent short_code from composition table in REDIS REFERENCE DATA
 
-Material Group → use material_groups table (keep multiple values comma-separated)
+Composition → put the fabric_content_code of the relevant fabric_content_code_description from the fabric_content table in REDIS REFERENCE DATA
 
-Cluster → use cluster values from customers table
+Material Group → use material_groups table from REDIS REFERENCE DATA and add them into a list(keep multiple values comma-separated)
+
+Cluster → use cluster values from customers table from REDIS REFERENCE DATA
 
 Width UOM / Order Unit → if value = "inches", replace with " (double quote)
 
