@@ -46,6 +46,12 @@ ENHANCEMENT RULES (apply only if both target field exists AND Redis data is avai
 - Action: IF both true, use the first available material_type from material_security_groups array
 - Confidence: "enhanced"
 
+**Material Security Group** → 
+- Check: Does TARGET MAPPING DATA contain a field with "Material Security Group" in target_field?
+- Check: Does REDIS REFERENCE DATA contain "material_security_groups" array with security_group values?
+- Action: IF both true, use the first available security_group from material_security_groups array
+- Confidence: "enhanced"
+
 **Material Description** → 
 - Always keep the original material description as it is (no enhancement needed)
 - Confidence: "original"
@@ -111,13 +117,15 @@ Input TARGET MAPPING DATA:
 [
   {"target_field": "Supplier", "target_value": "ABC Company"},
   {"target_field": "UOM", "target_value": "Yds"},
-  {"target_field": "Material Type", "target_value": "Fabric"}
+  {"target_field": "Material Type", "target_value": "Fabric"},
+  {"target_field": "Material Security Group", "target_value": "Unknown"}
 ]
 
 Input REDIS REFERENCE DATA:
 {
   "suppliers": [{"vendor_code": "SUP001", "currency": "USD"}],
-  "customers": [{"id": "CUST123", "cluster": "US-East"}]
+  "customers": [{"id": "CUST123", "cluster": "US-East"}],
+  "material_security_groups": [{"cluster": "ACTIVE", "customer": "Alo Yoga", "security_group": "Active_Alo Yoga", "material_type": "Fabric"}]
 }
 
 Processing Steps:
@@ -126,14 +134,17 @@ Processing Steps:
 3. Apply enhancement rule: replace "ABC Company" with "SUP001"
 4. "UOM" field exists with value "Yds" ✓
 5. Apply normalization rule: replace "Yds" with "Yards"
-6. "Material Type" field exists but no material_security_groups in Redis ✗
-7. Keep original value "Fabric"
+6. "Material Type" field exists and material_security_groups in Redis has material_type ✓
+7. Apply enhancement rule: replace "Fabric" with "Fabric" (same value from Redis)
+8. "Material Security Group" field exists and material_security_groups in Redis has security_group ✓
+9. Apply enhancement rule: replace "Unknown" with "Active_Alo Yoga"
 
 Expected Output:
 [
   {"target_field": "Supplier", "target_value": "SUP001", "target_confidence": "enhanced"},
   {"target_field": "UOM", "target_value": "Yards", "target_confidence": "enhanced"},
-  {"target_field": "Material Type", "target_value": "Fabric", "target_confidence": "original"}
+  {"target_field": "Material Type", "target_value": "Fabric", "target_confidence": "enhanced"},
+  {"target_field": "Material Security Group", "target_value": "Active_Alo Yoga", "target_confidence": "enhanced"}
 ]
 
 {% else %}
