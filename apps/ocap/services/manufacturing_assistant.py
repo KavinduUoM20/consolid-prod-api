@@ -382,12 +382,15 @@ Include specific part numbers, settings, or specifications when relevant.
             # Prepare technical database for prompt
             db_context = json.dumps(self.technical_db, indent=2)
             
+            print(f"🔍 Invoking slot extraction chain...")
             extracted = self.slot_chain.invoke({
                 "user_input": user_input,
                 "existing_slots": json.dumps(existing_slots, indent=2),
                 "conversation_context": context,
                 "technical_database": db_context
             })
+            print(f"🔍 Slot extraction result: {extracted}")
+            print(f"🔍 Slot extraction type: {type(extracted)}")
             
             # Validate extracted slots against database values
             validated_slots = {}
@@ -549,12 +552,15 @@ Include specific part numbers, settings, or specifications when relevant.
         try:
             # 1. Analyze user intent
             context = self._get_conversation_context()
+            print(f"🔍 Invoking intent chain with context: {context[:100]}...")
+            
             intent_analysis = self.intent_chain.invoke({
                 "user_input": user_input,
                 "conversation_history": context
             })
             
             print(f"🧠 Intent Analysis: {intent_analysis}")
+            print(f"🧠 Intent Analysis Type: {type(intent_analysis)}")
             
             # Handle new problem request in post-solution phase
             current_phase = self.conversation_state.current_phase
@@ -569,10 +575,13 @@ Include specific part numbers, settings, or specifications when relevant.
             
             # 2. Extract slots from user input (only if in problem-solving phases)
             if current_phase not in [ConversationPhase.POST_SOLUTION]:
+                print(f"🔍 Extracting slots from input...")
                 extracted_slots = self._extract_slots_from_input(user_input)
                 if extracted_slots:
                     self.conversation_state.slots.update(extracted_slots)
                     print(f"📝 Extracted: {extracted_slots}")
+                else:
+                    print(f"📝 No slots extracted")
             
             # 3. Determine next action based on phase and slots
             missing_slots = self._get_missing_critical_slots()
@@ -594,10 +603,28 @@ Include specific part numbers, settings, or specifications when relevant.
             return response
             
         except Exception as e:
-            print(f"❌ Error processing message: {e}")
-            print(f"❌ Error type: {type(e).__name__}")
+            print(f"❌ PRODUCTION ERROR - Message Processing Failed")
+            print(f"❌ Error: {str(e)}")
+            print(f"❌ Error Type: {type(e).__name__}")
+            print(f"❌ User Input: {user_input}")
+            print(f"❌ Turn Count: {self.conversation_state.turn_count}")
+            print(f"❌ Current Phase: {self.conversation_state.current_phase}")
+            print(f"❌ Collected Slots: {self.conversation_state.slots}")
+            
             import traceback
-            print(f"❌ Full traceback: {traceback.format_exc()}")
+            print(f"❌ FULL TRACEBACK:")
+            print(traceback.format_exc())
+            print(f"❌ END TRACEBACK")
+            
+            # Log environment status
+            try:
+                from common.utils.llm_connections import required_vars
+                print(f"❌ ENV CHECK - Deployment: {required_vars.get('AZURE_OPENAI_DEPLOYMENT', 'NOT SET')}")
+                print(f"❌ ENV CHECK - Endpoint: {required_vars.get('AZURE_OPENAI_ENDPOINT', 'NOT SET')}")
+                print(f"❌ ENV CHECK - API Version: {required_vars.get('AZURE_OPENAI_API_VERSION', 'NOT SET')}")
+                print(f"❌ ENV CHECK - API Key: {'SET' if required_vars.get('AZURE_OPENAI_API_KEY') else 'NOT SET'}")
+            except Exception as env_e:
+                print(f"❌ ENV CHECK FAILED: {env_e}")
             
             # Provide a more helpful fallback response
             if self.conversation_state.turn_count <= 1:
