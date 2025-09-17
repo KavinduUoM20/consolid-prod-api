@@ -676,6 +676,7 @@ class ExtractionService:
                             material_group_dict = {}
                             
                             # First pass: Group all data by material_group (case-insensitive)
+                            print(f"Processing {len(rows)} material_groups records...")
                             for row in rows:
                                 row_material_group = row.get('material_group', '')
                                 material_sub_group = row.get('material_sub_group', '')
@@ -692,6 +693,8 @@ class ExtractionService:
                                     
                                     if material_sub_group:
                                         material_group_dict[normalized_group]['sub_groups'].add(material_sub_group)
+                            
+                            print(f"Grouped into {len(material_group_dict)} unique material_groups")
                             
                             # Second pass: Find similar material_groups using semantic matching
                             filtered_sub_groups = set()
@@ -715,6 +718,14 @@ class ExtractionService:
                             
                             # Convert to sorted list for consistent output
                             rows = sorted(list(filtered_sub_groups))
+                            
+                            # Print the filtered results for debugging
+                            print(f"=== Material Groups Filter Results ===")
+                            print(f"Search term: '{material_group}'")
+                            print(f"Found {len(rows)} unique material_sub_groups:")
+                            for i, sub_group in enumerate(rows, 1):
+                                print(f"  {i}. {sub_group}")
+                            print(f"=== End Material Groups Results ===")
                         
                         # Handle material_groups data when no specific material_group filter is provided
                         elif table_name == "material_groups" and not material_group:
@@ -727,6 +738,14 @@ class ExtractionService:
                             
                             # Return top 20 most common material groups (sorted alphabetically)
                             rows = sorted(list(unique_groups))[:20]
+                            
+                            # Print the summary results for debugging
+                            print(f"=== Material Groups Summary ===")
+                            print(f"No specific material_group filter provided")
+                            print(f"Returning top {len(rows)} unique material_groups:")
+                            for i, group in enumerate(rows, 1):
+                                print(f"  {i}. {group}")
+                            print(f"=== End Material Groups Summary ===")
                         
                         # Filter fabric_contents data by fabric_content_code_description if provided
                         elif table_name == "fabric_contents" and fabric_content_code_description:
