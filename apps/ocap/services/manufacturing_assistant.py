@@ -534,9 +534,17 @@ Include specific part numbers, settings, or specifications when relevant.
     
     def process_user_message(self, user_input: str) -> str:
         """Main method to process user input and generate technical response."""
-        # Update conversation state
-        self.conversation_state.turn_count += 1
-        self.conversation_state.conversation_history.append(user_input)
+        try:
+            # Update conversation state
+            self.conversation_state.turn_count += 1
+            self.conversation_state.conversation_history.append(user_input)
+            
+            print(f"🔍 Processing user message: {user_input[:100]}...")
+            print(f"📊 Turn count: {self.conversation_state.turn_count}")
+            
+        except Exception as e:
+            print(f"❌ Error updating conversation state: {e}")
+            return "I'm having trouble processing your message. Please try again."
         
         try:
             # 1. Analyze user intent
@@ -587,7 +595,15 @@ Include specific part numbers, settings, or specifications when relevant.
             
         except Exception as e:
             print(f"❌ Error processing message: {e}")
-            return "I apologize, but I'm having some technical difficulties. Could you please describe the problem again?"
+            print(f"❌ Error type: {type(e).__name__}")
+            import traceback
+            print(f"❌ Full traceback: {traceback.format_exc()}")
+            
+            # Provide a more helpful fallback response
+            if self.conversation_state.turn_count <= 1:
+                return "🔧 Welcome to Manufacturing Technical Support! I'm experiencing some technical issues, but I can still help. Please describe the manufacturing problem you're having - what operation were you performing and what type of issue occurred?"
+            else:
+                return "I'm having some technical difficulties with my advanced features, but I'm still here to help. Could you please tell me more about your manufacturing problem? What operation, machine type, and issue are you experiencing?"
     
     def get_conversation_summary(self) -> ConversationSummary:
         """Get current conversation state summary."""
