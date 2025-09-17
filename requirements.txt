@@ -12,3 +12,7 @@ openai
 Jinja2
 pydantic_settings
 redis
+langchain
+langchain-community
+langchain-openai
+langchain-core
