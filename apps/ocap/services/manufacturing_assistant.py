@@ -394,7 +394,9 @@ Include specific part numbers, settings, or specifications when relevant.
             
             # Validate extracted slots against database values
             validated_slots = {}
-            for slot_name, value in extracted.dict().items():
+            # Handle both dict and Pydantic objects
+            slot_items = extracted.dict().items() if hasattr(extracted, 'dict') else extracted.items()
+            for slot_name, value in slot_items:
                 if value is not None and slot_name in self.slot_config:
                     # Check if value exists in database
                     db_key = slot_name + "s" if slot_name != "machine_type" else "machine_types"
@@ -588,14 +590,18 @@ Include specific part numbers, settings, or specifications when relevant.
             
             if current_phase == ConversationPhase.POST_SOLUTION:
                 # Handle post-solution interactions
-                response = self._generate_intelligent_response(user_input, intent_analysis.dict())
+                # Handle both dict and Pydantic objects
+                intent_dict = intent_analysis.dict() if hasattr(intent_analysis, 'dict') else intent_analysis
+                response = self._generate_intelligent_response(user_input, intent_dict)
             elif not missing_slots and current_phase not in [ConversationPhase.COMPLETION, ConversationPhase.POST_SOLUTION]:
                 # All information collected - generate technical solution
                 response = self._generate_technical_solution()
                 self.conversation_state.current_phase = ConversationPhase.COMPLETION
             else:
                 # Generate intelligent response to continue problem diagnosis
-                response = self._generate_intelligent_response(user_input, intent_analysis.dict())
+                # Handle both dict and Pydantic objects
+                intent_dict = intent_analysis.dict() if hasattr(intent_analysis, 'dict') else intent_analysis
+                response = self._generate_intelligent_response(user_input, intent_dict)
             
             # Add response to conversation history
             self.conversation_state.conversation_history.append(response)
