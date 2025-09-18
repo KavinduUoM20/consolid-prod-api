@@ -4,7 +4,7 @@ import json
 
 router = APIRouter()
 
-@router.get("/ocap-chat/health")
+@router.get("/ocap/health")
 async def health_check():
     """Health check endpoint to test LLM connectivity."""
     health_status = {
@@ -127,7 +127,7 @@ async def health_check():
     
     return health_status
 
-@router.get("/ocap-chat/test-llm")
+@router.get("/ocap/test-llm")
 async def test_llm_direct():
     """Direct LLM test endpoint."""
     try:
