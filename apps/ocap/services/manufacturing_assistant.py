@@ -15,6 +15,7 @@ from ..models.technical_models import (
     ConversationSummary
 )
 from ..config import get_ocap_settings
+from .technical_db_service import TechnicalDatabaseService
 from common.utils.llm_connections import required_vars
 
 class ManufacturingTechnicalAssistant:
@@ -37,6 +38,9 @@ class ManufacturingTechnicalAssistant:
         
         # Store settings for OCAP-specific configuration
         self.settings = settings
+        
+        # Initialize database service
+        self.db_service = TechnicalDatabaseService()
         
         # Conversation state
         self.conversation_state = ConversationState()
@@ -115,74 +119,30 @@ class ManufacturingTechnicalAssistant:
             "operations": [
                 "Attach sleeve to body",
                 "Attach sleeve to body barrel seam",
-                "Raglon sleeve attach",
-                "Side seam",
-                "Hemming",
-                "Button hole",
-                "Zipper attachment",
-                "Collar attach",
-                "Pocket attach",
-                "Cuff attach",
-                "Waistband attach",
-                "Belt loop attach",
-                "Facing attach",
-                "Lining attach",
-                "Topstitching",
-                "Edge finishing",
-                "Seam finishing"
+                "Raglon Sleeve attach",
+                "Side Seam"
             ],
             "machine_types": [
                 "FS",  # Flat Seam
-                "OL",  # Overlock
-                "LS",  # Lock Stitch
-                "BS",  # Blind Stitch
-                "BH",  # Button Hole
-                "ZZ",  # Zigzag
-                "CV",  # Cover Stitch
-                "SF",  # Safety Stitch
-                "CH",  # Chain Stitch
-                "BT",  # Bar Tack
-                "EB",  # Eyelet Buttonhole
-                "KN"   # Knit Stitch
+                "OL",  # Overloc
             ],
             "defects": [
                 "Broken stitch",
-                "Raw edge",
-                "Puckering",
-                "Skipped stitch",
-                "Thread break",
-                "Uneven seam",
-                "Loose tension",
-                "Tight seam",
-                "Seam slippage",
-                "Needle holes",
-                "Fabric damage",
-                "Stitch density variation",
-                "Seam twist",
-                "Edge curl",
-                "Fabric stretch",
-                "Color bleeding",
-                "Thread fray"
+                "Raw edge"
+               
             ],
             "errors": [
-                "Blunt needle",
-                "Foot/Throat plate damage",
-                "Incorrect foot shoe",
-                "Wrong needle size",
-                "Thread tension issue",
-                "Feed dog problem",
-                "Timing issue",
-                "Motor malfunction",
-                "Thread path obstruction",
-                "Bobbin issue",
-                "Presser foot pressure",
-                "Stitch length setting",
-                "Thread quality issue",
-                "Machine calibration",
-                "Lubrication problem",
-                "Belt tension",
-                "Electrical issue",
-                "Sensor malfunction"
+                "Throat plate damage",
+                "Manual trimming",
+                "Looper damage / Looper/Spreader damage",
+                "Incorrect timing",
+                "Incorrect thread tension tightness",
+                "Incorrect Foot pressure",
+                "Incorrect foot height",
+                "Incorrect feedog height",
+                "High pressure vacuum cutters",
+                "Blunt Needle",
+                "Incorrect Foot shoe"
             ]
         }
         
@@ -283,24 +243,24 @@ Response should be professional and technically accurate, like talking to an exp
         
         # 4. Technical Solution Generation Chain
         solution_template = PromptTemplate(
-            input_variables=["problem_details", "technical_context"],
+            input_variables=["problem_details", "database_context"],
             template="""
-Generate comprehensive technical solution and analysis:
+Generate a concise technical solution based on the problem details and database context.
 
 Problem Details: {problem_details}
-Technical Context: {technical_context}
 
-Create detailed technical analysis including:
-1. Problem diagnosis and root cause analysis
-2. Step-by-step troubleshooting procedures
-3. Recommended solutions and fixes
-4. Preventive measures to avoid recurrence
-5. Quality check procedures
-6. When to escalate to maintenance team
-7. Safety considerations if applicable
+Database Context:
+{database_context}
 
-Make it professional, detailed, and actionable for manufacturing technicians.
-Include specific part numbers, settings, or specifications when relevant.
+Instructions:
+1. If database context contains a matching solution, use it as the primary reference
+2. If no database context is available, provide a relevant technical solution based on the problem details
+3. Keep the solution concise but actionable - maximum 3-4 sentences
+4. Include specific actions, settings, or components to check/adjust
+5. Use professional manufacturing terminology
+6. Focus on the most critical steps to resolve the issue
+
+Format your response as a clear, actionable solution that a technician can immediately implement.
 """
         )
         self.solution_chain = solution_template | self.llm | StrOutputParser()
@@ -462,6 +422,42 @@ Include specific part numbers, settings, or specifications when relevant.
         # Return match if score is above threshold
         return best_match if best_score > 0.3 else None
     
+    async def _retrieve_database_context(self) -> str:
+        """Retrieve technical solution from database based on current slots."""
+        try:
+            # Only retrieve if we have some slots filled
+            if not self.conversation_state.slots:
+                return "No database context available - no technical information collected yet."
+            
+            print(f"🔍 Retrieving database context for slots: {self.conversation_state.slots}")
+            
+            # Call database service to retrieve single solution
+            db_result = await self.db_service.retrieve_technical_solutions(self.conversation_state.slots)
+            
+            if not db_result.get("found") or not db_result.get("solution"):
+                return "No matching technical solution found in database for current problem parameters."
+            
+            # Format single solution for prompt context
+            solution = db_result.get("solution")
+            context_parts = [
+                "Found matching technical solution:",
+                f"  - Operation: {solution.get('operation', 'N/A')}",
+                f"  - Machine Type: {solution.get('machinetype', 'N/A')}",
+                f"  - Defect: {solution.get('defect', 'N/A')}",
+                f"  - Error: {solution.get('error', 'N/A')}",
+                f"  - Root Cause: {solution.get('fishbone', 'N/A')}",
+                f"  - Recommended Action: {solution.get('action', 'N/A')}"
+            ]
+            
+            formatted_context = "\n".join(context_parts)
+            print(f"✅ Retrieved database context: 1 solution found")
+            
+            return formatted_context
+            
+        except Exception as e:
+            print(f"❌ Error retrieving database context: {e}")
+            return f"Database retrieval error: {str(e)}"
+    
     def _generate_intelligent_response(self, user_input: str, intent_analysis: Dict) -> str:
         """Generate contextually appropriate technical response."""
         try:
@@ -511,11 +507,14 @@ Include specific part numbers, settings, or specifications when relevant.
         next_question = slot_questions.get(missing[0], "Could you provide more details about the technical problem?")
         return next_question
     
-    def _generate_technical_solution(self) -> str:
-        """Generate comprehensive technical solution."""
+    async def _generate_technical_solution(self) -> str:
+        """Generate concise technical solution with database context."""
         try:
             problem_details = self.conversation_state.slots.copy()
-            technical_context = self.conversation_state.technical_context
+            
+            # Retrieve database context for final solution
+            print(f"🔍 Retrieving database context for final solution: {problem_details}")
+            database_context = await self._retrieve_database_context()
             
             # Store solved problem
             self.conversation_state.problem_count += 1
@@ -525,7 +524,7 @@ Include specific part numbers, settings, or specifications when relevant.
             
             solution = self.solution_chain.invoke({
                 "problem_details": json.dumps(problem_details, indent=2),
-                "technical_context": json.dumps(technical_context, indent=2)
+                "database_context": database_context
             })
             
             # Add post-solution message
@@ -537,7 +536,7 @@ Include specific part numbers, settings, or specifications when relevant.
             print(f"❌ Error generating solution: {e}")
             return "✅ Based on the information provided, I recommend checking the machine settings and components. Please follow standard troubleshooting procedures.\n\n🔧 Do you have any other technical problems I can help with?"
     
-    def process_user_message(self, user_input: str) -> str:
+    async def process_user_message(self, user_input: str) -> str:
         """Main method to process user input and generate technical response."""
         try:
             # Update conversation state
@@ -595,7 +594,7 @@ Include specific part numbers, settings, or specifications when relevant.
                 response = self._generate_intelligent_response(user_input, intent_dict)
             elif not missing_slots and current_phase not in [ConversationPhase.COMPLETION, ConversationPhase.POST_SOLUTION]:
                 # All information collected - generate technical solution
-                response = self._generate_technical_solution()
+                response = await self._generate_technical_solution()
                 self.conversation_state.current_phase = ConversationPhase.COMPLETION
             else:
                 # Generate intelligent response to continue problem diagnosis
@@ -664,3 +663,27 @@ Include specific part numbers, settings, or specifications when relevant.
     def get_technical_database(self) -> Dict:
         """Get the technical database for reference."""
         return self.technical_db.copy()
+    
+    async def test_database_connection(self) -> bool:
+        """Test the database connection and retrieval functionality."""
+        try:
+            print("🔍 Testing OCAP database connection...")
+            is_connected = await self.db_service.test_connection()
+            
+            if is_connected:
+                print("✅ Database connection test passed")
+                
+                # Test sample retrieval with minimal slots
+                test_slots = {"operation": "Attach sleeve to body"}
+                test_result = await self.db_service.retrieve_technical_solutions(test_slots)
+                found = test_result.get('found', False)
+                print(f"✅ Sample retrieval test: {'Solution found' if found else 'No solution found'}")
+                
+                return True
+            else:
+                print("❌ Database connection test failed")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Database test error: {e}")
+            return False

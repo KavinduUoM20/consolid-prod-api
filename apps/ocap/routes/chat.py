@@ -73,7 +73,7 @@ async def manufacturing_chat_websocket(websocket: WebSocket):
                 print(f"📨 Processing message for {connection_id}: {user_message[:50]}...")
                 
                 # Process message through manufacturing assistant
-                response = assistant.process_user_message(user_message)
+                response = await assistant.process_user_message(user_message)
                 print(f"📤 Generated response for {connection_id}: {response[:50]}...")
                 
                 # Get conversation summary for metadata
