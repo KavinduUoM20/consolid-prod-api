@@ -5,6 +5,9 @@ from typing import List
 class OCAPSettings(BaseSettings):
     """OCAP application settings."""
     
+    # Database configuration - reuse same database as dociq
+    DATABASE_URL: str
+    
     # OCAP Specific Settings (no Azure OpenAI config - using shared LLM connections)
     CONVERSATION_TIMEOUT: int = 3600  # 1 hour in seconds
     MAX_CONVERSATION_TURNS: int = 100
