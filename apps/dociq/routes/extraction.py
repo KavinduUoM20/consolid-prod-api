@@ -435,9 +435,9 @@ async def enhance_extraction(
                 "enhancement_stats": {"original": 0, "enhanced": 0},
                 "total_fields": 0
             }
-    
-    return EnhanceExtractionResponse(
-        extraction_id=extraction_id,
+        
+        return EnhanceExtractionResponse(
+            extraction_id=extraction_id,
             message=message,
             data=request.data,  # ✅ Original target data from request
             redis_data=redis_data,  # ✅ Related Redis data (customers, suppliers, material_security_groups)

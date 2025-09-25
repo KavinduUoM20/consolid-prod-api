@@ -137,7 +137,7 @@ async def get_template_field_mappings(session: AsyncSession, template_id: UUID) 
     return "\n".join(field_mappings_text)
 
 
-async def process_content_mapping(document_id: UUID, template_id: UUID, session: AsyncSession):
+async def process_content_mapping(document_id: UUID, template_id: UUID, session: AsyncSession, cluster: str = None, customer: str = None):
     """
     Process content mapping with document_id and template_id
     
@@ -145,6 +145,8 @@ async def process_content_mapping(document_id: UUID, template_id: UUID, session:
         document_id: UUID of the document
         template_id: UUID of the template
         session: Database session
+        cluster: Optional cluster identifier for reference in template
+        customer: Optional customer identifier for reference in template
         
     Returns:
         Mapping results
@@ -165,7 +167,9 @@ async def process_content_mapping(document_id: UUID, template_id: UUID, session:
     # Render template with the retrieved data
     rendered_prompt = template.render(
         template_info=template_field_mappings,
-        md_content=document_content
+        md_content=document_content,
+        cluster=cluster,
+        customer=customer
     )
     
     # Call LLM using llm_connections.py
