@@ -134,7 +134,7 @@ async def test_llm_direct():
         from apps.ocap.services.manufacturing_assistant import ManufacturingTechnicalAssistant
         
         assistant = ManufacturingTechnicalAssistant()
-        response = assistant.process_user_message("Hello, test message")
+        response = await assistant.process_user_message("Hello, test message")
         
         return {
             "status": "success",

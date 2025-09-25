@@ -99,7 +99,7 @@ async def manufacturing_chat_websocket(websocket: WebSocket):
                 
             except json.JSONDecodeError:
                 # Handle plain text messages
-                response = assistant.process_user_message(data)
+                response = await assistant.process_user_message(data)
                 
                 response_message = WebSocketMessage(
                     type="assistant_response",
