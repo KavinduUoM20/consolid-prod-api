@@ -6,6 +6,8 @@ import ssl
 
 # Import models so SQLAlchemy can discover them
 from apps.dociq.models import Template, Document, Extraction, TargetMapping
+# Import auth models
+from core.auth.models import Tenant, User, UserSession
 
 settings = get_dociq_settings()
 
@@ -33,6 +35,10 @@ AsyncSessionLocal = sessionmaker(
 
 async def init_dociq_db():
     async with engine.begin() as conn:
+        # Import all models to ensure they're registered
+        from apps.dociq.models import Template, Document, Extraction, TargetMapping
+        from core.auth.models import Tenant, User, UserSession
+        
         await conn.run_sync(SQLModel.metadata.create_all)
 
 async def get_dociq_session() -> AsyncSession:

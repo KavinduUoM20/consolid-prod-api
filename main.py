@@ -7,6 +7,7 @@ from starlette.responses import RedirectResponse
 from api.router import router as api_router  # << use this, not api.v1.router
 from apps.dociq.db import init_dociq_db
 from apps.dociq.config import get_dociq_settings
+from core.auth.db import setup_initial_data
 
 app = FastAPI(title="Consolidator AI API", version="1.0.0")
 
@@ -73,5 +74,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 async def startup_event():
     """Initialize database on startup"""
     await init_dociq_db()
+    # Setup initial auth data (default tenant and super admin)
+    await setup_initial_data()
 
 app.include_router(api_router) 

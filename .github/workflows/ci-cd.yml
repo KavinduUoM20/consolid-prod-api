@@ -41,6 +41,14 @@ jobs:
       env:
         DATABASE_URI: postgresql+asyncpg://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}
         PYTHONPATH: ${{ github.workspace }}
+        # Auth environment variables for testing
+        JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        JWT_ALGORITHM: HS256
+        JWT_EXPIRE_MINUTES: 30
+        DEFAULT_TENANT_SLUG: default
+        AUTH_DEFAULT_ADMIN_USERNAME: admin
+        AUTH_DEFAULT_ADMIN_EMAIL: admin@test.com
+        AUTH_DEFAULT_ADMIN_PASSWORD: TestAdmin123!
       run: |
         # Run tests with proper Python path
         python -m pytest tests/ -v --tb=short || echo "Some tests failed, but continuing..."
@@ -143,6 +151,13 @@ jobs:
             -e AZURE_OPENAI_API_VERSION="${{ secrets.AZURE_OPENAI_API_VERSION }}" \
             -e AZURE_OPENAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}" \
             -e AZURE_OPENAI_DEPLOYMENT="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}" \
+            -e JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
+            -e JWT_ALGORITHM="HS256" \
+            -e JWT_EXPIRE_MINUTES="30" \
+            -e DEFAULT_TENANT_SLUG="default" \
+            -e AUTH_DEFAULT_ADMIN_USERNAME="${{ secrets.AUTH_DEFAULT_ADMIN_USERNAME }}" \
+            -e AUTH_DEFAULT_ADMIN_EMAIL="${{ secrets.AUTH_DEFAULT_ADMIN_EMAIL }}" \
+            -e AUTH_DEFAULT_ADMIN_PASSWORD="${{ secrets.AUTH_DEFAULT_ADMIN_PASSWORD }}" \
             --network nginx-proxy-manager_default \
             ${{ secrets.DOCKER_USERNAME }}/consolid-prod-api:latest
           
