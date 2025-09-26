@@ -8,13 +8,29 @@ from core.auth.models import User
 from core.auth.config import get_auth_settings
 
 
-# Password hashing context with explicit bcrypt configuration
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=12,  # Explicit rounds for consistency
-    bcrypt__ident="2b"  # Use 2b variant for better compatibility
-)
+# Password hashing context with fallback configuration
+try:
+    # Try to create bcrypt context with explicit configuration
+    pwd_context = CryptContext(
+        schemes=["bcrypt"],
+        deprecated="auto",
+        bcrypt__rounds=12,  # Explicit rounds for consistency
+        bcrypt__ident="2b"  # Use 2b variant for better compatibility
+    )
+    # Test if bcrypt works by hashing a short test password
+    pwd_context.hash("test")
+except Exception as e:
+    print(f"Bcrypt initialization failed: {e}")
+    print("Falling back to simpler bcrypt configuration...")
+    # Fallback to minimal bcrypt configuration
+    try:
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        pwd_context.hash("test")
+    except Exception as e2:
+        print(f"Simple bcrypt also failed: {e2}")
+        print("Falling back to PBKDF2 (less secure but works)...")
+        # Ultimate fallback to PBKDF2
+        pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 # Get auth settings
 auth_settings = get_auth_settings()
