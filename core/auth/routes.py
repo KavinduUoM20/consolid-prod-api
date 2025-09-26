@@ -12,6 +12,7 @@ from core.auth.schemas import (
     PasswordChangeSchema,
     TokenResponseSchema,
     UserResponseSchema,
+    UserLoginResponseSchema,
     TenantResponseSchema,
     ErrorResponseSchema
 )
@@ -35,7 +36,7 @@ router = APIRouter()
              response_model=UserResponseSchema,
              status_code=status.HTTP_201_CREATED,
              summary="Register a new user",
-             description="Register a new user account with username, email, and password")
+             description="Register a new user account. Users are added to the default tenant unless specified.")
 async def register(
     user_data: UserRegisterSchema,
     tenant_slug: str = Query(default="default", description="Tenant slug"),
@@ -57,7 +58,7 @@ async def register(
 @router.post("/login",
              response_model=TokenResponseSchema,
              summary="User login",
-             description="Authenticate user and return access token")
+             description="Authenticate user with username/email and password. Tenant is automatically detected.")
 async def login(
     credentials: UserLoginSchema,
     auth_service: AuthService = Depends(get_auth_service)
@@ -65,8 +66,7 @@ async def login(
     """Authenticate user and return access token."""
     user = await auth_service.authenticate_user(
         credentials.username,
-        credentials.password,
-        credentials.tenant_slug or "default"
+        credentials.password
     )
     
     if not user:
@@ -79,11 +79,19 @@ async def login(
     # Create access token
     access_token, jti, expires_in = await auth_service.create_access_token(user)
     
+    # Create minimal user response for login
+    user_login_info = UserLoginResponseSchema(
+        id=user.id,
+        username=user.username,
+        role=user.role,
+        tenant_slug=user.tenant.slug
+    )
+    
     return TokenResponseSchema(
         access_token=access_token,
         token_type="bearer",
         expires_in=expires_in,
-        user=UserResponseSchema.from_orm(user)
+        user=user_login_info
     )
 
 

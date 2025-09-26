@@ -79,7 +79,7 @@ async def emergency_create_admin(
             role=UserRole.SUPER_ADMIN
         )
         
-        admin_user = await auth_service.register_user(user_data, "default")
+        admin_user = await auth_service.register_user(user_data, tenant.slug)
         
         # Mark as verified
         admin_user.is_verified = True

@@ -94,19 +94,12 @@ class AuthService:
     async def authenticate_user(
         self, 
         username: str, 
-        password: str, 
-        tenant_slug: str = "default"
+        password: str
     ) -> Optional[User]:
         """Authenticate a user by username/email and password."""
-        # Get tenant
-        tenant = await self.get_tenant_by_slug(tenant_slug)
-        if not tenant or not tenant.is_active:
-            return None
-        
-        # Find user by username or email within tenant
+        # Find user by username or email across all active tenants
         stmt = select(User).options(selectinload(User.tenant)).where(
             and_(
-                User.tenant_id == tenant.id,
                 or_(
                     User.username == username.lower(),
                     User.email == username.lower()
@@ -118,6 +111,10 @@ class AuthService:
         user = result.scalar_one_or_none()
         
         if not user:
+            return None
+        
+        # Check if user's tenant is active
+        if not user.tenant or not user.tenant.is_active:
             return None
         
         # Verify password
