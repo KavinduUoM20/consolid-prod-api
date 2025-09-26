@@ -56,7 +56,6 @@ class UserLoginSchema(BaseModel):
     """Schema for user login."""
     username: str = Field(..., description="Username or email")
     password: str = Field(..., description="Password")
-    tenant_slug: Optional[str] = Field(default="default", description="Tenant slug")
 
 
 class PasswordChangeSchema(BaseModel):
@@ -110,12 +109,23 @@ class UserResponseSchema(BaseModel):
         from_attributes = True
 
 
+class UserLoginResponseSchema(BaseModel):
+    """Minimal user info for login response (security-focused)."""
+    id: uuid.UUID
+    username: str
+    role: str
+    tenant_slug: str
+    
+    class Config:
+        from_attributes = True
+
+
 class TokenResponseSchema(BaseModel):
     """Schema for authentication token response."""
     access_token: str
     token_type: str = "bearer"
     expires_in: int  # seconds
-    user: UserResponseSchema
+    user: UserLoginResponseSchema
 
 
 class TokenDataSchema(BaseModel):
