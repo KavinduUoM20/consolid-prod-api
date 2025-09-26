@@ -75,6 +75,13 @@ async def startup_event():
     """Initialize database on startup"""
     await init_dociq_db()
     # Setup initial auth data (default tenant and super admin)
-    await setup_initial_data()
+    try:
+        result = await setup_initial_data()
+        if result[0] is None:  # Auth setup failed but app should continue
+            print("Auth setup skipped due to compatibility issues. App will run without initial admin user.")
+    except Exception as e:
+        print(f"Critical error during auth setup: {e}")
+        # Don't crash the entire app for auth setup issues
+        print("Application will continue without auth setup. You can create users manually via API.")
 
 app.include_router(api_router) 

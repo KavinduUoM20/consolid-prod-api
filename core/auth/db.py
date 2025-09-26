@@ -113,6 +113,20 @@ async def setup_initial_data():
     except Exception as e:
         print(f"Error setting up initial auth data: {e}")
         print(f"Error type: {type(e).__name__}")
-        import traceback
-        traceback.print_exc()
-        raise
+        
+        # If it's a bcrypt/password hashing error, provide helpful message
+        if "password cannot be longer than 72 bytes" in str(e) or "bcrypt" in str(e).lower():
+            print("=" * 60)
+            print("BCRYPT COMPATIBILITY ISSUE DETECTED")
+            print("This is likely due to bcrypt version incompatibility.")
+            print("The application will continue to run, but you'll need to:")
+            print("1. Update the Docker image with the new requirements.txt")
+            print("2. Or manually create the admin user via API after startup")
+            print("=" * 60)
+            # Don't raise the exception - let the app continue without initial setup
+            return None, None
+        else:
+            # For other errors, still raise
+            import traceback
+            traceback.print_exc()
+            raise
