@@ -99,13 +99,20 @@ async def create_super_admin(
 
 async def setup_initial_data():
     """Setup initial data including default tenant and super admin."""
-    print("Setting up initial auth data...")
-    
-    # Create default tenant
-    default_tenant = await create_default_tenant()
-    
-    # Create super admin
-    admin_user = await create_super_admin()
-    
-    print("Initial auth data setup completed!")
-    return default_tenant, admin_user
+    try:
+        print("Setting up initial auth data...")
+        
+        # Create default tenant
+        default_tenant = await create_default_tenant()
+        
+        # Create super admin
+        admin_user = await create_super_admin()
+        
+        print("Initial auth data setup completed!")
+        return default_tenant, admin_user
+    except Exception as e:
+        print(f"Error setting up initial auth data: {e}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise
