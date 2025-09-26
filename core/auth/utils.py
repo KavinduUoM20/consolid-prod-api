@@ -8,8 +8,13 @@ from core.auth.models import User
 from core.auth.config import get_auth_settings
 
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing context with explicit bcrypt configuration
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__rounds=12,  # Explicit rounds for consistency
+    bcrypt__ident="2b"  # Use 2b variant for better compatibility
+)
 
 # Get auth settings
 auth_settings = get_auth_settings()
@@ -21,11 +26,17 @@ class PasswordUtils:
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a password using bcrypt."""
+        # Bcrypt has a 72-byte limit, truncate if necessary
+        if len(password.encode('utf-8')) > 72:
+            password = password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
         return pwd_context.hash(password)
     
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash."""
+        # Bcrypt has a 72-byte limit, truncate if necessary
+        if len(plain_password.encode('utf-8')) > 72:
+            plain_password = plain_password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
         return pwd_context.verify(plain_password, hashed_password)
     
     @staticmethod
