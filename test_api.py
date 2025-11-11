@@ -7,7 +7,6 @@ import json
 import sys
 
 def test_api_endpoints():
-    """Test API endpoints to verify they're working"""
     
     # Base URL - change this to your actual API URL
     base_url = "https://api.consolidator-ai.site"
