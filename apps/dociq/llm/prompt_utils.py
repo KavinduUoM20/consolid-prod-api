@@ -127,11 +127,18 @@ async def get_template_field_mappings(session: AsyncSession, template_id: UUID) 
     # Extract field_mappings and format as text
     field_mappings_text = []
     for i, field_mapping in enumerate(template.field_mappings, 1):
-        field_text = f"{i}. Target Field: {field_mapping['target_field']}\n"
-        field_text += f"   Sample Field Names: {', '.join(field_mapping['sample_field_names'])}\n"
-        field_text += f"   Value Patterns: {', '.join(field_mapping['value_patterns'])}\n"
-        field_text += f"   Description: {field_mapping['description']}\n"
-        field_text += f"   Required: {field_mapping['required']}\n"
+        # Support both Pydantic models and plain dicts
+        fm = (
+            field_mapping.model_dump()
+            if hasattr(field_mapping, "model_dump")
+            else dict(field_mapping)
+        )
+
+        field_text = f"{i}. Target Field: {fm.get('target_field')}\n"
+        field_text += f"   Sample Field Names: {', '.join(fm.get('sample_field_names', []))}\n"
+        field_text += f"   Value Patterns: {', '.join(fm.get('value_patterns', []))}\n"
+        field_text += f"   Description: {fm.get('description')}\n"
+        field_text += f"   Required: {fm.get('required')}\n"
         field_mappings_text.append(field_text)
     
     return "\n".join(field_mappings_text)
