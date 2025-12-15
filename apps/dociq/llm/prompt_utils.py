@@ -195,6 +195,54 @@ async def process_content_mapping(document_id: UUID, template_id: UUID, session:
     return target_mapping
 
 
+def _limit_redis_data_size(redis_data: dict, max_records_per_table: int = 20) -> dict:
+    """
+    Limit the size of Redis data to prevent token limit issues
+    
+    Args:
+        redis_data: Dictionary containing Redis table results
+        max_records_per_table: Maximum number of records to include per table
+        
+    Returns:
+        Dictionary with limited Redis data
+    """
+    if not redis_data:
+        return {}
+    
+    limited_data = {
+        "query_info": redis_data.get("query_info", {})
+    }
+    
+    # Define table-specific limits (more aggressive for large tables)
+    table_limits = {
+        "customers": max_records_per_table,
+        "suppliers": max_records_per_table,  # Often large, limit aggressively
+        "material_security_groups": max_records_per_table,
+        "material_groups": max_records_per_table,
+        "composition": max_records_per_table,
+        "fabric_contents": max_records_per_table  # Often very large, limit aggressively
+    }
+    
+    # Limit each table
+    for table_name, limit in table_limits.items():
+        table_data = redis_data.get(table_name, [])
+        if isinstance(table_data, list):
+            original_count = len(table_data)
+            
+            # If data is already small (likely filtered), keep it all
+            # Otherwise, limit to the specified max
+            if original_count <= limit:
+                limited_data[table_name] = table_data
+            else:
+                # Limit the number of records
+                limited_data[table_name] = table_data[:limit]
+                print(f"Limited {table_name}: {original_count} -> {limit} records (to prevent token limit)")
+        else:
+            limited_data[table_name] = table_data
+    
+    return limited_data
+
+
 async def process_content_enhancement(target_mappings: List[dict], redis_data: dict = None):
     """
     Process content enhancement with target mappings and Redis data
@@ -206,6 +254,10 @@ async def process_content_enhancement(target_mappings: List[dict], redis_data: d
     Returns:
         LLM enhancement response
     """
+    # Limit Redis data size to prevent token limit issues
+    # Use a conservative limit of 20 records per table to stay well under token limits
+    limited_redis_data = _limit_redis_data_size(redis_data, max_records_per_table=20) if redis_data else None
+    
     # Get the Jinja template
     template_content = get_content_enhancer_template()
     
@@ -216,8 +268,8 @@ async def process_content_enhancement(target_mappings: List[dict], redis_data: d
     # Prepare data for template rendering
     template_data = {
         "target_mappings": target_mappings,
-        "redis_data": redis_data or {},
-        "has_redis_data": redis_data is not None
+        "redis_data": limited_redis_data or {},
+        "has_redis_data": limited_redis_data is not None
     }
     
     # Render template with the data
